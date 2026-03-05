@@ -9,9 +9,26 @@
 | Internal Release Code | Date Released |
 |-----------------------|---------------|
 | IH.010.001            | 2026-02-27    |
+| IH.010.002            | 2026-03-07    |
 | ...                   | ...           |
 
 ---
+## [IH.010.002](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+- add counselor dashboard
+- add counselor specific components
+- fix config files & color tokens
+- add student dashboard components
+- add student appointment booking page
+- change api routes for booking
+- remove placeholder db
+- replaced entities with data transfer types
+- add in-memory repository
+- add CRUD APIs for booking
+- unified dashboard layout
+- add user role check for dashboard
+- add appointments page
+- change booking modal to booking page
 
 ## [IH.010.001](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
