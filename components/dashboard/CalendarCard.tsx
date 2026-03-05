@@ -15,7 +15,8 @@ export default function CalendarCard() {
           mode="single"
           selected={date}
           onSelect={setDate}
-          className="w-full rounded-md border p-2"
+          className="w-full rounded-lg p-2"
+          style={{ border: "1px solid var(--md-sys-color-outline-variant)" }}
         />
       </div>
     </DashboardCard>
