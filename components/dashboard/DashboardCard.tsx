@@ -18,12 +18,20 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <Card className="md3-card w-full">
+    <Card className="md3-card w-full rounded-xl">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description ? <CardDescription>{description}</CardDescription> : null}
+        <CardTitle className="text-base font-semibold text-[var(--md-sys-color-on-surface)]">
+          {title}
+        </CardTitle>
+        {description ? (
+          <CardDescription className="text-[var(--md-sys-color-on-surface-variant)]">
+            {description}
+          </CardDescription>
+        ) : null}
       </CardHeader>
-      {children ? <CardContent className="flex flex-wrap gap-2">{children}</CardContent> : null}
+      {children ? (
+        <CardContent className="flex flex-wrap gap-2">{children}</CardContent>
+      ) : null}
     </Card>
   );
 }
