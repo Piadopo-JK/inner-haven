@@ -4,32 +4,22 @@ import * as React from "react";
 
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
+import { Md3Message } from "@/components/ui/md3-message";
 import { cn } from "@/lib/utils";
-import {
-  Appointment,
-  AppointmentStatus,
-  Counselor,
-  SessionNote,
-  SessionType,
-} from "@/lib/entities";
-import {
-  placeholderCounselors,
-  saveAppointmentPlaceholder,
-} from "@/lib/placeholders/booking";
+import { CounselorDirectoryItemDTO, SessionMode } from "@/lib/booking/contracts";
 
 type BookingFormProps = {
   className?: string;
-  defaultStudentId?: string;
-  counselors?: Counselor[];
-  onConfirm?: (appointment: Appointment, note?: SessionNote) => void;
+  studentId: string;
 };
 
-const timeSlots = [
-  { label: "9 AM", value: "09:00" },
-  { label: "10 AM", value: "10:00" },
-  { label: "2 PM", value: "14:00" },
-  { label: "3 PM", value: "15:00" },
-] as const;
+function formatTime(time: string): string {
+  const [hourStr, minuteStr] = time.split(":");
+  const hour = parseInt(hourStr, 10);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const display = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+  return `${display}:${minuteStr} ${suffix}`;
+}
 
 function formatDateOnly(date: Date) {
   const year = date.getFullYear();
@@ -38,30 +28,60 @@ function formatDateOnly(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export default function BookingForm({
-  className,
-  defaultStudentId = "student-local",
-  counselors,
-  onConfirm,
-}: BookingFormProps) {
-  const [availableCounselors, setAvailableCounselors] = React.useState<Counselor[]>(
-    counselors ?? placeholderCounselors,
-  );
+export default function BookingForm({ className, studentId }: BookingFormProps) {
+  const [counselors, setCounselors] = React.useState<CounselorDirectoryItemDTO[]>([]);
   const [counselorId, setCounselorId] = React.useState("");
-  const [sessionType, setSessionType] = React.useState<SessionType>(SessionType.IN_PERSON);
+  const [sessionMode, setSessionMode] = React.useState<SessionMode>("in_person");
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>();
   const [selectedTime, setSelectedTime] = React.useState("");
   const [currentMonth, setCurrentMonth] = React.useState<Date>(new Date());
-  const [additionalNotes, setAdditionalNotes] = React.useState("");
+  const [reason, setReason] = React.useState("");
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
+  const [availableTimes, setAvailableTimes] = React.useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = React.useState(false);
+  const [slotsError, setSlotsError] = React.useState("");
 
   React.useEffect(() => {
-    setAvailableCounselors(counselors?.length ? counselors : placeholderCounselors);
-  }, [counselors]);
+    let isMounted = true;
+    fetch("/api/counselors")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: CounselorDirectoryItemDTO[]) => {
+        if (isMounted) setCounselors(data);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const isValid = Boolean(counselorId && sessionType && selectedDate && selectedTime);
+  React.useEffect(() => {
+    if (!counselorId || !selectedDate) {
+      setAvailableTimes([]);
+      setSlotsError("");
+      return;
+    }
+
+    setSlotsLoading(true);
+    setSlotsError("");
+    const date = formatDateOnly(selectedDate);
+    fetch(`/api/availability?counselor_id=${counselorId}&date=${date}`)
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((slots: { appointment_time: string; available: boolean }[]) => {
+        setAvailableTimes(
+          slots.filter((slot) => slot.available).map((slot) => slot.appointment_time),
+        );
+        setSlotsLoading(false);
+      })
+      .catch(() => {
+        setAvailableTimes([]);
+        setSlotsError("Could not load availability. Please try again.");
+        setSlotsLoading(false);
+      });
+  }, [counselorId, selectedDate]);
+
+  const isValid = Boolean(counselorId && sessionMode && selectedDate && selectedTime);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,48 +93,40 @@ export default function BookingForm({
       return;
     }
 
-    const appointmentId = crypto.randomUUID();
-
-    const appointment = new Appointment({
-      appointment_id: appointmentId,
-      student_id: defaultStudentId,
-      counselor_id: counselorId,
-      appointment_date: formatDateOnly(selectedDate),
-      appointment_time: selectedTime,
-      mode: sessionType,
-      reason: additionalNotes.trim(),
-      status: AppointmentStatus.PENDING,
-    });
-
-    const noteText = additionalNotes.trim();
-    const note = noteText
-      ? new SessionNote({
-          note_id: crypto.randomUUID(),
-          appointment_id: appointmentId,
-          counselor_id: counselorId,
-          note_content: noteText,
-        })
-      : undefined;
-
-    onConfirm?.(appointment, note);
-
     setIsSaving(true);
-      const saveResult = await saveAppointmentPlaceholder(appointment, note); // taken from lib/placeholders/booking , removed
+    const response = await fetch("/api/appointments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_id: studentId,
+        counselor_id: counselorId,
+        appointment_date: formatDateOnly(selectedDate),
+        appointment_time: selectedTime,
+        reason: reason.trim(),
+        mode: sessionMode,
+      }),
+    });
     setIsSaving(false);
 
-    const selectedCounselor = availableCounselors.find(
-      (item) => item.counselor_id === counselorId,
-    );
+    if (!response.ok) {
+      setError("Failed to submit booking. Please try again.");
+      return;
+    }
 
+    const selectedCounselor = counselors.find((c) => c.counselor_id === counselorId);
     setSuccess(
       [
         `Counselor: ${selectedCounselor?.name ?? counselorId}`,
-        `Session Type: ${sessionType}`,
-        `Date: ${appointment.appointment_date}`,
-        `Time: ${appointment.appointment_time}`,
-        `Additional Notes: ${noteText || "None"}`,
+        `Session Type: ${sessionMode}`,
+        `Date: ${formatDateOnly(selectedDate)}`,
+        `Time: ${selectedTime}`,
+        `Reason: ${reason.trim() || "None"}`,
       ].join(" | "),
     );
+    setCounselorId("");
+    setSelectedDate(undefined);
+    setSelectedTime("");
+    setReason("");
   }
 
   return (
@@ -138,7 +150,7 @@ export default function BookingForm({
             required
           >
             <option value="">Select Counselor</option>
-            {availableCounselors.map((counselor) => (
+            {counselors.map((counselor) => (
               <option key={counselor.counselor_id} value={counselor.counselor_id}>
                 {counselor.name}
               </option>
@@ -155,13 +167,13 @@ export default function BookingForm({
           </label>
           <select
             id="session-type"
-            value={sessionType}
-            onChange={(event) => setSessionType(event.target.value as SessionType)}
+            value={sessionMode}
+            onChange={(event) => setSessionMode(event.target.value as SessionMode)}
             className="h-9 w-full rounded-md border px-3 text-sm border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
             required
           >
-            <option value={SessionType.IN_PERSON}>in_person</option>
-            <option value={SessionType.ONLINE}>online</option>
+            <option value="in_person">in_person</option>
+            <option value="online">online</option>
           </select>
         </div>
       </div>
@@ -220,21 +232,39 @@ export default function BookingForm({
           <div className="grid content-start gap-2">
             <p className="text-sm font-medium">Select time</p>
             <div className="grid grid-cols-2 gap-2">
-              {timeSlots.map((slot) => (
-                <button
-                  key={slot.value}
-                  type="button"
-                  onClick={() => setSelectedTime(slot.value)}
-                  className={cn(
-                    "rounded-md border px-3 py-2 text-sm border-[var(--md-sys-color-outline-variant)]",
-                    selectedTime === slot.value
-                      ? "border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary)] text-white"
-                      : "bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]",
-                  )}
-                >
-                  {slot.label}
-                </button>
-              ))}
+              {!counselorId || !selectedDate ? (
+                <p className="col-span-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  Select a counselor and date first.
+                </p>
+              ) : slotsLoading ? (
+                <p className="col-span-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  Loading times…
+                </p>
+              ) : slotsError ? (
+                <Md3Message tone="error" className="col-span-2 text-xs">
+                  {slotsError}
+                </Md3Message>
+              ) : availableTimes.length === 0 ? (
+                <p className="col-span-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
+                  No available times for this date.
+                </p>
+              ) : (
+                availableTimes.map((time) => (
+                  <button
+                    key={time}
+                    type="button"
+                    onClick={() => setSelectedTime(time)}
+                    className={cn(
+                      "rounded-md border px-3 py-2 text-sm border-[var(--md-sys-color-outline-variant)]",
+                      selectedTime === time
+                        ? "border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]"
+                        : "bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]",
+                    )}
+                  >
+                    {formatTime(time)}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -242,30 +272,31 @@ export default function BookingForm({
 
       <div className="grid gap-2">
         <label
-          htmlFor="additional-notes"
+          htmlFor="reason"
           className="text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]"
         >
-          Additional notes
+          Reason
         </label>
         <textarea
-          id="additional-notes"
-          value={additionalNotes}
-          onChange={(event) => setAdditionalNotes(event.target.value)}
+          id="reason"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
           placeholder="Add context for the counselor"
           className="min-h-24 w-full rounded-md border px-3 py-2 text-sm border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
         />
       </div>
 
-      {(error || success) && (
-        <p
-          className={cn(
-            "text-sm whitespace-pre-wrap",
-            error ? "text-red-600" : "text-green-600",
-          )}
-        >
-          {error || success}
-        </p>
-      )}
+      {error ? (
+        <Md3Message tone="error" className="whitespace-pre-wrap">
+          {error}
+        </Md3Message>
+      ) : null}
+
+      {!error && success ? (
+        <Md3Message tone="success" className="whitespace-pre-wrap">
+          {success}
+        </Md3Message>
+      ) : null}
 
       <div className="flex justify-end">
         <Button type="submit" disabled={isSaving}>
