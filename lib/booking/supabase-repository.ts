@@ -6,6 +6,7 @@ import {
   BookingRequestDTO,
   CounselorDirectoryItemDTO,
   NotificationDTO,
+  SessionRole,
 } from "@/lib/booking/contracts";
 import { BookingRepository } from "@/lib/booking/repository";
 
@@ -27,7 +28,7 @@ export class SupabaseBookingRepository implements BookingRepository {
   }
 
   async listAppointments(_filter: {
-    role: "student" | "counselor";
+    role: SessionRole;
     student_id?: string;
     counselor_id?: string;
     status?: AppointmentStatus;
@@ -43,9 +44,22 @@ export class SupabaseBookingRepository implements BookingRepository {
   }
 
   async listNotifications(
-    _role: "counselor",
-    _counselorId?: string,
+    _role: SessionRole,
+    _userId?: string,
   ): Promise<NotificationDTO[]> {
     throw new Error("Not implemented: listNotifications");
+  }
+
+  async markNotificationRead(
+    _notificationId: string,
+  ): Promise<NotificationDTO | null> {
+    throw new Error("Not implemented: markNotificationRead");
+  }
+
+  async countUnreadNotifications(
+    _role: SessionRole,
+    _userId?: string,
+  ): Promise<number> {
+    throw new Error("Not implemented: countUnreadNotifications");
   }
 }

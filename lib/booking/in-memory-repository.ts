@@ -5,6 +5,7 @@
   BookingRequestDTO,
   CounselorDirectoryItemDTO,
   NotificationDTO,
+  SessionRole,
 } from "@/lib/booking/contracts";
 import { BookingRepository } from "@/lib/booking/repository";
 
@@ -71,11 +72,27 @@ export class InMemoryBookingRepository implements BookingRepository {
     };
 
     this.appointments.push(appointment);
+
+    // Notify counselor: new booking request
     this.notifications.push({
       notification_id: crypto.randomUUID(),
-      counselor_id: input.counselor_id,
+      recipient_id: input.counselor_id,
+      recipient_role: "counselor",
+      type: "booking_request",
       appointment_id: appointment.appointment_id,
-      message: `New pending appointment request for ${input.appointment_date} ${input.appointment_time}`,
+      message: `New booking request for ${input.appointment_date} at ${input.appointment_time}`,
+      created_at: now,
+      read: false,
+    });
+
+    // Notify student: booking submitted
+    this.notifications.push({
+      notification_id: crypto.randomUUID(),
+      recipient_id: input.student_id,
+      recipient_role: "student",
+      type: "booking_pending",
+      appointment_id: appointment.appointment_id,
+      message: `Your booking for ${input.appointment_date} at ${input.appointment_time} has been submitted`,
       created_at: now,
       read: false,
     });
@@ -84,7 +101,7 @@ export class InMemoryBookingRepository implements BookingRepository {
   }
 
   async listAppointments(filter: {
-    role: "student" | "counselor";
+    role: SessionRole;
     student_id?: string;
     counselor_id?: string;
     status?: AppointmentStatus;
@@ -111,14 +128,63 @@ export class InMemoryBookingRepository implements BookingRepository {
       updated_at: new Date().toISOString(),
     };
 
-    return this.appointments[index];
+    const appointment = this.appointments[index];
+    const now = new Date().toISOString();
+
+    // Notify student about status change
+    if (status === "approved") {
+      this.notifications.push({
+        notification_id: crypto.randomUUID(),
+        recipient_id: appointment.student_id,
+        recipient_role: "student",
+        type: "booking_approved",
+        appointment_id: appointmentId,
+        message: `Your booking for ${appointment.appointment_date} at ${appointment.appointment_time} has been approved`,
+        created_at: now,
+        read: false,
+      });
+    } else if (status === "cancelled") {
+      this.notifications.push({
+        notification_id: crypto.randomUUID(),
+        recipient_id: appointment.student_id,
+        recipient_role: "student",
+        type: "booking_declined",
+        appointment_id: appointmentId,
+        message: `Your booking for ${appointment.appointment_date} at ${appointment.appointment_time} has been declined`,
+        created_at: now,
+        read: false,
+      });
+    }
+
+    return appointment;
   }
 
-  async listNotifications(role: "counselor", counselorId?: string) {
-    if (role !== "counselor") return [];
+  async listNotifications(role: SessionRole, userId?: string) {
+    return this.notifications
+      .filter(
+        (n) =>
+          n.recipient_role === role &&
+          (userId ? n.recipient_id === userId : true),
+      )
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
 
-    return this.notifications.filter((item) =>
-      counselorId ? item.counselor_id === counselorId : true,
+  async markNotificationRead(notificationId: string) {
+    const index = this.notifications.findIndex(
+      (n) => n.notification_id === notificationId,
     );
+    if (index === -1) return null;
+
+    this.notifications[index] = { ...this.notifications[index], read: true };
+    return this.notifications[index];
+  }
+
+  async countUnreadNotifications(role: SessionRole, userId?: string) {
+    return this.notifications.filter(
+      (n) =>
+        n.recipient_role === role &&
+        !n.read &&
+        (userId ? n.recipient_id === userId : true),
+    ).length;
   }
 }

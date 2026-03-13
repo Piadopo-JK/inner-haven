@@ -1,4 +1,4 @@
-﻿import { AppointmentStatus, BookingRequestDTO } from "@/lib/booking/contracts";
+﻿import { AppointmentStatus, BookingRequestDTO, SessionRole } from "@/lib/booking/contracts";
 import { InMemoryBookingRepository } from "@/lib/booking/in-memory-repository";
 import { BookingRepository } from "@/lib/booking/repository";
 
@@ -18,10 +18,10 @@ class BookingService {
   }
 
   listAppointments(filter: {
-    role: "student" | "counselor";
+    role: SessionRole;
     student_id?: string;
     counselor_id?: string;
-    status?: import("@/lib/booking/contracts").AppointmentStatus;
+    status?: AppointmentStatus;
   }) {
     return this.repo.listAppointments(filter);
   }
@@ -30,8 +30,16 @@ class BookingService {
     return this.repo.updateAppointmentStatus(id, status);
   }
 
-  listNotifications(role: "counselor", counselorId?: string) {
-    return this.repo.listNotifications(role, counselorId);
+  listNotifications(role: SessionRole, userId?: string) {
+    return this.repo.listNotifications(role, userId);
+  }
+
+  markNotificationRead(notificationId: string) {
+    return this.repo.markNotificationRead(notificationId);
+  }
+
+  countUnreadNotifications(role: SessionRole, userId?: string) {
+    return this.repo.countUnreadNotifications(role, userId);
   }
 }
 
