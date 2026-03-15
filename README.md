@@ -10,9 +10,21 @@
 |-----------------------|---------------|
 | IH.010.001            | 2026-02-27    |
 | IH.010.002            | 2026-03-07    |
+| IH.010.003            | 2026-03-13    |
 | ...                   | ...           |
 
 ---
+
+## [IH.010.003](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+-add navigation bar
+-add notification bell component
+-add notification page, list card & server action
+-add booking notifications
+-add notif DTO
+-add notif API on booking service
+-add API route for notification for student/councelor
+
 ## [IH.010.002](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
 - add counselor dashboard
