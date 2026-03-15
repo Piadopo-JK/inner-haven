@@ -5,6 +5,7 @@
   BookingRequestDTO,
   CounselorDirectoryItemDTO,
   NotificationDTO,
+  SessionRole,
 } from "@/lib/booking/contracts";
 
 export interface BookingRepository {
@@ -12,7 +13,7 @@ export interface BookingRepository {
   getAvailability(counselorId: string, date: string): Promise<AvailabilitySlotDTO[]>;
   createAppointment(input: BookingRequestDTO): Promise<AppointmentDTO>;
   listAppointments(filter: {
-    role: "student" | "counselor";
+    role: SessionRole;
     student_id?: string;
     counselor_id?: string;
     status?: AppointmentStatus;
@@ -21,5 +22,7 @@ export interface BookingRepository {
     appointmentId: string,
     status: AppointmentStatus,
   ): Promise<AppointmentDTO | null>;
-  listNotifications(role: "counselor", counselorId?: string): Promise<NotificationDTO[]>;
+  listNotifications(role: SessionRole, userId?: string): Promise<NotificationDTO[]>;
+  markNotificationRead(notificationId: string): Promise<NotificationDTO | null>;
+  countUnreadNotifications(role: SessionRole, userId?: string): Promise<number>;
 }
