@@ -11,6 +11,7 @@
 export interface BookingRepository {
   listCounselors(): Promise<CounselorDirectoryItemDTO[]>;
   getAvailability(counselorId: string, date: string): Promise<AvailabilitySlotDTO[]>;
+  getAvailableCounselors(date: string, time: string): Promise<CounselorDirectoryItemDTO[]>;
   createAppointment(input: BookingRequestDTO): Promise<AppointmentDTO>;
   listAppointments(filter: {
     role: SessionRole;
