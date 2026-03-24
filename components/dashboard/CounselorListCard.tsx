@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { CounselorDirectoryItemDTO } from "@/lib/booking/contracts";
 
@@ -36,6 +38,16 @@ export default function CounselorListCard({
           </li>
         ))}
       </ul>
+
+      <div className="mt-3 text-right">
+        <Link
+          href="/counselors"
+          className="text-xs font-medium"
+          style={{ color: "var(--md-sys-color-primary)" }}
+        >
+          View all -&gt;
+        </Link>
+      </div>
     </DashboardCard>
   );
 }
