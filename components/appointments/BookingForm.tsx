@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Md3Message } from "@/components/ui/md3-message";
 import { cn } from "@/lib/utils";
 import { CounselorDirectoryItemDTO, SessionMode } from "@/lib/booking/contracts";
+import { createClient } from "@/lib/supabase/client";
 
 type BookingFormProps = {
   className?: string;
   studentId: string;
 };
+
+const defaultSlots = ["09:00", "10:00", "14:00", "15:00"];
 
 function formatTime(time: string): string {
   const [hourStr, minuteStr] = time.split(":");
@@ -31,6 +34,8 @@ function formatDateOnly(date: Date) {
 export default function BookingForm({ className, studentId }: BookingFormProps) {
   const [counselors, setCounselors] = React.useState<CounselorDirectoryItemDTO[]>([]);
   const [counselorId, setCounselorId] = React.useState("");
+  const [counselorsLoading, setCounselorsLoading] = React.useState(false);
+  const [counselorsError, setCounselorsError] = React.useState("");
   const [sessionMode, setSessionMode] = React.useState<SessionMode>("in_person");
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>();
   const [selectedTime, setSelectedTime] = React.useState("");
@@ -39,47 +44,73 @@ export default function BookingForm({ className, studentId }: BookingFormProps) 
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
-  const [availableTimes, setAvailableTimes] = React.useState<string[]>([]);
-  const [slotsLoading, setSlotsLoading] = React.useState(false);
-  const [slotsError, setSlotsError] = React.useState("");
 
-  React.useEffect(() => {
-    let isMounted = true;
-    fetch("/api/counselors")
-      .then((res) => (res.ok ? res.json() : Promise.reject()))
-      .then((data: CounselorDirectoryItemDTO[]) => {
-        if (isMounted) setCounselors(data);
-      })
-      .catch(() => {});
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (!counselorId || !selectedDate) {
-      setAvailableTimes([]);
-      setSlotsError("");
+  const refreshCounselorsForSlot = React.useCallback(async () => {
+    if (!selectedDate || !selectedTime) {
+      setCounselors([]);
+      setCounselorId("");
+      setCounselorsError("");
       return;
     }
 
-    setSlotsLoading(true);
-    setSlotsError("");
+    setCounselorsLoading(true);
+    setCounselorsError("");
     const date = formatDateOnly(selectedDate);
-    fetch(`/api/availability?counselor_id=${counselorId}&date=${date}`)
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((slots: { appointment_time: string; available: boolean }[]) => {
-        setAvailableTimes(
-          slots.filter((slot) => slot.available).map((slot) => slot.appointment_time),
-        );
-        setSlotsLoading(false);
-      })
-      .catch(() => {
-        setAvailableTimes([]);
-        setSlotsError("Could not load availability. Please try again.");
-        setSlotsLoading(false);
+
+    try {
+      const response = await fetch(
+        `/api/availability/counselors?date=${date}&time=${selectedTime}`,
+        { cache: "no-store" },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to load counselors");
+      }
+
+      const data = (await response.json()) as CounselorDirectoryItemDTO[];
+      setCounselors(data);
+      setCounselorId((current) =>
+        data.some((item) => item.counselor_id === current) ? current : "",
+      );
+    } catch {
+      setCounselors([]);
+      setCounselorsError("Could not load counselors. Please try again.");
+      setCounselorId("");
+    } finally {
+      setCounselorsLoading(false);
+    }
+  }, [selectedDate, selectedTime]);
+
+  React.useEffect(() => {
+    void refreshCounselorsForSlot();
+  }, [refreshCounselorsForSlot]);
+
+  React.useEffect(() => {
+    const supabase = createClient();
+    const fallbackInterval = window.setInterval(() => {
+      void refreshCounselorsForSlot();
+    }, 15000);
+
+    const channel = supabase
+      .channel("appointments-realtime-booking")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          void refreshCounselorsForSlot();
+        },
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          window.clearInterval(fallbackInterval);
+        }
       });
-  }, [counselorId, selectedDate]);
+
+    return () => {
+      window.clearInterval(fallbackInterval);
+      void supabase.removeChannel(channel);
+    };
+  }, [refreshCounselorsForSlot]);
 
   const isValid = Boolean(counselorId && sessionMode && selectedDate && selectedTime);
 
@@ -134,50 +165,6 @@ export default function BookingForm({ className, studentId }: BookingFormProps) 
       onSubmit={handleSubmit}
       className={cn("grid gap-5 text-[var(--md-sys-color-on-surface)]", className)}
     >
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-2">
-          <label
-            htmlFor="counselor"
-            className="text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]"
-          >
-            Select Counselor
-          </label>
-          <select
-            id="counselor"
-            value={counselorId}
-            onChange={(event) => setCounselorId(event.target.value)}
-            className="h-9 w-full rounded-md border px-3 text-sm border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
-            required
-          >
-            <option value="">Select Counselor</option>
-            {counselors.map((counselor) => (
-              <option key={counselor.counselor_id} value={counselor.counselor_id}>
-                {counselor.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-2">
-          <label
-            htmlFor="session-type"
-            className="text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]"
-          >
-            Session Type
-          </label>
-          <select
-            id="session-type"
-            value={sessionMode}
-            onChange={(event) => setSessionMode(event.target.value as SessionMode)}
-            className="h-9 w-full rounded-md border px-3 text-sm border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
-            required
-          >
-            <option value="in_person">in_person</option>
-            <option value="online">online</option>
-          </select>
-        </div>
-      </div>
-
       <div className="grid gap-3 rounded-md border p-3 border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)]">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
@@ -223,7 +210,12 @@ export default function BookingForm({ className, studentId }: BookingFormProps) 
               mode="single"
               month={currentMonth}
               selected={selectedDate}
-              onSelect={(date) => setSelectedDate(date ?? undefined)}
+              onSelect={(date) => {
+                setSelectedDate(date ?? undefined);
+                setSelectedTime("");
+                setCounselorId("");
+                setCounselors([]);
+              }}
               onMonthChange={(month) => setCurrentMonth(month)}
               className="w-full rounded-md border"
             />
@@ -232,28 +224,19 @@ export default function BookingForm({ className, studentId }: BookingFormProps) 
           <div className="grid content-start gap-2">
             <p className="text-sm font-medium">Select time</p>
             <div className="grid grid-cols-2 gap-2">
-              {!counselorId || !selectedDate ? (
+              {!selectedDate ? (
                 <p className="col-span-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                  Select a counselor and date first.
-                </p>
-              ) : slotsLoading ? (
-                <p className="col-span-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                  Loading times…
-                </p>
-              ) : slotsError ? (
-                <Md3Message tone="error" className="col-span-2 text-xs">
-                  {slotsError}
-                </Md3Message>
-              ) : availableTimes.length === 0 ? (
-                <p className="col-span-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                  No available times for this date.
+                  Select a date first.
                 </p>
               ) : (
-                availableTimes.map((time) => (
+                defaultSlots.map((time) => (
                   <button
                     key={time}
                     type="button"
-                    onClick={() => setSelectedTime(time)}
+                    onClick={() => {
+                      setSelectedTime(time);
+                      setCounselorId("");
+                    }}
                     className={cn(
                       "rounded-md border px-3 py-2 text-sm border-[var(--md-sys-color-outline-variant)]",
                       selectedTime === time
@@ -268,6 +251,63 @@ export default function BookingForm({ className, studentId }: BookingFormProps) 
             </div>
           </div>
         </div>
+      </div>
+
+      {selectedDate && selectedTime ? (
+        <div className="grid gap-2">
+          <label
+            htmlFor="counselor"
+            className="text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]"
+          >
+            Available counselors for this slot
+          </label>
+
+          {counselorsLoading ? (
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">Loading counselors...</p>
+          ) : counselorsError ? (
+            <Md3Message tone="error" className="text-xs">
+              {counselorsError}
+            </Md3Message>
+          ) : counselors.length === 0 ? (
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
+              No counselors available for this slot.
+            </p>
+          ) : (
+            <select
+              id="counselor"
+              value={counselorId}
+              onChange={(event) => setCounselorId(event.target.value)}
+              className="h-9 w-full rounded-md border px-3 text-sm border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
+              required
+            >
+              <option value="">Select Counselor</option>
+              {counselors.map((counselor) => (
+                <option key={counselor.counselor_id} value={counselor.counselor_id}>
+                  {counselor.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      ) : null}
+
+      <div className="grid gap-2">
+        <label
+          htmlFor="session-type"
+          className="text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]"
+        >
+          Session Type
+        </label>
+        <select
+          id="session-type"
+          value={sessionMode}
+          onChange={(event) => setSessionMode(event.target.value as SessionMode)}
+          className="h-9 w-full rounded-md border px-3 text-sm border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)]"
+          required
+        >
+          <option value="in_person">in_person</option>
+          <option value="online">online</option>
+        </select>
       </div>
 
       <div className="grid gap-2">
