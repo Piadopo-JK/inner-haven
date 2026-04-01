@@ -5,6 +5,14 @@ import { getSessionUser } from "@/lib/supabase/get-session-user";
 import { bookingService } from "@/lib/booking/service";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/nav/NotificationBell";
+import HamburgerMenu from "@/components/nav/HamburgerMenu";
+
+const navLinks = [
+  { label: "Home", href: "/dashboard" },
+  { label: "About", href: "/about" },
+  { label: "Services", href: "/services" },
+  { label: "Contact", href: "/contact" },
+];
 
 export default async function Navbar() {
   const sessionUser = await getSessionUser();
@@ -30,23 +38,40 @@ export default async function Navbar() {
         {/*  logo placeholder */}
         <Link
           href="/dashboard"
-          className="text-base font-semibold"
+          className="text-base font-semibold shrink-0"
           style={{ color: "var(--md-sys-color-on-surface)" }}
         >
-          GuidanceHub
+          GuidanceGo
         </Link>
 
-        <div className="flex items-center gap-1">
-            <NotificationBell
-              unreadCount={unreadCount}
-              recentNotifications={recent}
-            />
+        <div className="hidden md:flex items-center gap-1">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:text-primary"
+            >
+              <span className="text-foreground">{link.label}</span>
+            </Link>
+          ))}
+        </div>
 
-          {/* profile placeholder */}
-          <Button variant="ghost" size="icon">
+        <div className="flex items-center gap-1">
+          <NotificationBell
+            unreadCount={unreadCount}
+            recentNotifications={recent}
+          />
+
+          {/* profile desktop */}
+          <Button variant="ghost" size="icon" className="hidden md:flex">
             <User className="h-5 w-5" />
             <span className="sr-only">Profile</span>
           </Button>
+
+          {/* mobile profile replacement */}
+          <div className="md:hidden">
+            <HamburgerMenu />
+          </div>
         </div>
       </div>
     </nav>
