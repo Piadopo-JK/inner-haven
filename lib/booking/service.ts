@@ -1,6 +1,7 @@
 ﻿import { AppointmentStatus, BookingRequestDTO, SessionRole } from "@/lib/booking/contracts";
 import { InMemoryBookingRepository } from "@/lib/booking/in-memory-repository";
 import { BookingRepository } from "@/lib/booking/repository";
+import { SupabaseBookingRepository } from "@/lib/booking/supabase-repository";
 
 class BookingService {
   constructor(private repo: BookingRepository) {}
@@ -11,6 +12,10 @@ class BookingService {
 
   getAvailability(counselorId: string, date: string) {
     return this.repo.getAvailability(counselorId, date);
+  }
+
+  getAvailableCounselors(date: string, time: string) {
+    return this.repo.getAvailableCounselors(date, time);
   }
 
   createAppointment(input: BookingRequestDTO) {
@@ -43,4 +48,16 @@ class BookingService {
   }
 }
 
-export const bookingService = new BookingService(new InMemoryBookingRepository());
+function createBookingRepository(): BookingRepository {
+  const mode = process.env.BOOKING_REPOSITORY?.toLowerCase();
+
+  if (mode === "memory") {
+    console.info("[booking] Using InMemoryBookingRepository");
+    return new InMemoryBookingRepository();
+  }
+
+  console.info("[booking] Using SupabaseBookingRepository");
+  return new SupabaseBookingRepository();
+}
+
+export const bookingService = new BookingService(createBookingRepository());

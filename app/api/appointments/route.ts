@@ -3,6 +3,11 @@
 import { BookingRequestDTO } from "@/lib/booking/contracts";
 import { bookingService } from "@/lib/booking/service";
 
+function isPastAppointment(date: string, time: string) {
+  const scheduled = new Date(`${date}T${time}:00`);
+  return Number.isNaN(scheduled.getTime()) ? true : scheduled.getTime() < Date.now();
+}
+
 export async function GET(request: NextRequest) {
   const role = request.nextUrl.searchParams.get("role") as "student" | "counselor" | null;
   const studentId = request.nextUrl.searchParams.get("student_id") ?? undefined;
@@ -35,6 +40,13 @@ export async function POST(request: NextRequest) {
     !body?.mode
   ) {
     return NextResponse.json({ error: "Invalid booking received" }, { status: 400 });
+  }
+
+  if (isPastAppointment(body.appointment_date, body.appointment_time)) {
+    return NextResponse.json(
+      { error: "You cannot book an appointment in the past" },
+      { status: 400 },
+    );
   }
 
   const created = await bookingService.createAppointment(body);

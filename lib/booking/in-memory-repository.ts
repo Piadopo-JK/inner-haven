@@ -56,6 +56,23 @@ export class InMemoryBookingRepository implements BookingRepository {
     }));
   }
 
+  async getAvailableCounselors(date: string, time: string) {
+    const takenCounselorIds = new Set(
+      this.appointments
+        .filter(
+          (item) =>
+            item.appointment_date === date &&
+            item.appointment_time === time &&
+            ["pending", "approved"].includes(item.status),
+        )
+        .map((item) => item.counselor_id),
+    );
+
+    return this.counselors.filter(
+      (counselor) => !takenCounselorIds.has(counselor.counselor_id),
+    );
+  }
+
   async createAppointment(input: BookingRequestDTO) {
     const now = new Date().toISOString();
     const appointment: AppointmentDTO = {

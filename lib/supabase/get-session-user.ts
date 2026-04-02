@@ -11,8 +11,8 @@ export type SessionUser = {
 /**
  * DEV BYPASS: When running locally without a Supabase session, set
  * DEV_ROLE=student or DEV_ROLE=counselor in .env.local to skip auth.
- * student  -> "dev-student-001"
- * counselor -> "cslr-001"
+ * student  -> "00000000-0000-0000-0000-000000000001"
+ * counselor -> "00000000-0000-0000-0000-000000000002"
  */
 function getDevBypassUser(): SessionUser | null {
   if (process.env.NODE_ENV !== "development") return null;
@@ -20,7 +20,10 @@ function getDevBypassUser(): SessionUser | null {
   if (!devRole) return null;
   const role: SessionRole = devRole === "counselor" ? "counselor" : "student";
   return {
-    userId: role === "counselor" ? "cslr-001" : "dev-student-001",
+    userId:
+      role === "counselor"
+        ? "00000000-0000-0000-0000-000000000002"
+        : "00000000-0000-0000-0000-000000000001",
     role,
     email: undefined,
   };
