@@ -29,7 +29,7 @@ export default async function DashboardPage() {
     return <CounselorView counselorId={sessionUser.userId} />;
   }
 
-  return <StudentView />;
+  return <StudentView studentId={sessionUser.userId} />;
 }
 
 // Counselor view
@@ -53,7 +53,7 @@ async function CounselorView({ counselorId }: { counselorId: string }) {
         <PendingRequestsCard items={pendingItems} />
         <div className="grid gap-4 content-start">
           <Suspense fallback={null}>
-            <CalendarCard />
+            <CalendarCard appointments={[]} />
           </Suspense>
           <TodayOverviewCard pending={todayPending} scheduled={todayScheduled} />
         </div>
@@ -64,8 +64,11 @@ async function CounselorView({ counselorId }: { counselorId: string }) {
 
 // Student view
 
-async function StudentView() {
-  const counselors = await bookingService.listCounselors();
+async function StudentView({ studentId }: { studentId: string }) {
+  const [counselors, appointments] = await Promise.all([
+    bookingService.listCounselors(),
+    bookingService.listAppointments({ role: "student", student_id: studentId }),
+  ]);
 
   return (
     <main className="mx-auto grid w-full max-w-7xl gap-4 p-4">
@@ -86,7 +89,7 @@ async function StudentView() {
 
         <div className="grid gap-4">
           <Suspense fallback={null}>
-            <CalendarCard />
+            <CalendarCard appointments={appointments} />
           </Suspense>
           <CounselorListCard counselors={counselors} />
           <RecentMessagesCard />
