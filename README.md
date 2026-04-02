@@ -11,9 +11,19 @@
 | IH.010.001            | 2026-02-27    |
 | IH.010.002            | 2026-03-07    |
 | IH.010.003            | 2026-03-13    |
+| IH.010.004            | 2026-03-25    |
 | ...                   | ...           |
 
 ---
+
+## [IH.010.004](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+- add supabase booking repository and move appointment flow to supabase
+- add counselor directory search and availability slots
+- refactor booking page to slot-first booking flow
+- add appointment conflict checking and past booking guard
+- add realtime availability updates for counselor directory and booking page
+- add missing entity modules for build stability
 
 ## [IH.010.003](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
