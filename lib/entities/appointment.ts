@@ -11,6 +11,7 @@ export type AppointmentProps = {
   status: AppointmentStatus;
   created_at?: string;
   updated_at?: string;
+  meeting_link?: string;
 };
 
 export class Appointment {
@@ -24,6 +25,7 @@ export class Appointment {
   status: AppointmentStatus;
   created_at?: string;
   updated_at?: string;
+  meeting_link?: string;
 
   constructor(props: AppointmentProps) {
     this.appointment_id = props.appointment_id;
@@ -36,5 +38,6 @@ export class Appointment {
     this.status = props.status;
     this.created_at = props.created_at;
     this.updated_at = props.updated_at;
+    this.meeting_link = props.meeting_link;
   }
 }
