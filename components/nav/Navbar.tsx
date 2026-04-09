@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { User } from "lucide-react";
 
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 import { bookingService } from "@/lib/booking/service";
-import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/nav/NotificationBell";
 import HamburgerMenu from "@/components/nav/HamburgerMenu";
+import ProfileMenu from "@/components/nav/ProfileMenu";
 
 const navLinks = [
   { label: "Home", href: "/dashboard" },
@@ -62,11 +61,7 @@ export default async function Navbar() {
             recentNotifications={recent}
           />
 
-          {/* profile desktop */}
-          <Button variant="ghost" size="icon" className="hidden md:flex">
-            <User className="h-5 w-5" />
-            <span className="sr-only">Profile</span>
-          </Button>
+          <ProfileMenu />
 
           {/* mobile profile replacement */}
           <div className="md:hidden">
