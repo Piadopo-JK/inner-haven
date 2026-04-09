@@ -5,10 +5,12 @@ export const dynamic = "force-dynamic";
 
 import { bookingService } from "@/lib/booking/service";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { createServiceClient } from "@/lib/supabase/server";
 import CalendarCard from "@/components/dashboard/CalendarCard";
 import CounselorSummaryCard from "@/components/counselor/CounselorSummaryCard";
 import PendingRequestsCard from "@/components/counselor/PendingRequestsCard";
 import TodayOverviewCard from "@/components/counselor/TodayOverviewCard";
+import GoogleConnectBanner from "@/components/counselor/GoogleConnectBanner";
 import LandingMessage from "@/components/dashboard/LandingMessage";
 import NextAppointmentCard from "@/components/dashboard/NextAppointmentCard";
 import WelcomeCard from "@/components/dashboard/WelcomeCard";
@@ -37,10 +39,20 @@ export default async function DashboardPage() {
 async function CounselorView({ counselorId }: { counselorId: string }) {
   const today = new Date().toISOString().split("T")[0];
 
-  const [pendingItems, allItems] = await Promise.all([
+  const supabase = createServiceClient();
+
+  const [pendingItems, allItems, counselorRow] = await Promise.all([
     bookingService.listAppointments({ role: "counselor", counselor_id: counselorId, status: "pending" }),
     bookingService.listAppointments({ role: "counselor", counselor_id: counselorId }),
+    supabase
+      .from("counselors")
+      .select("counselor_id, google_refresh_token")
+      .eq("auth_user_id", counselorId)
+      .maybeSingle()
+      .then(({ data }) => data),
   ]);
+
+  const isGoogleConnected = !!counselorRow?.google_refresh_token;
 
   const todayItems = allItems.filter((item) => item.appointment_date === today);
   const todayPending = todayItems.filter((item) => item.status === "pending").length;
@@ -48,12 +60,13 @@ async function CounselorView({ counselorId }: { counselorId: string }) {
 
   return (
     <main className="mx-auto grid w-full max-w-7xl gap-4 p-4">
+      <GoogleConnectBanner isConnected={isGoogleConnected} />
       <CounselorSummaryCard />
       <section className="grid gap-4 md:grid-cols-2">
         <PendingRequestsCard items={pendingItems} />
         <div className="grid gap-4 content-start">
           <Suspense fallback={null}>
-            <CalendarCard appointments={[]} />
+            <CalendarCard appointments={allItems} />
           </Suspense>
           <TodayOverviewCard pending={todayPending} scheduled={todayScheduled} />
         </div>
