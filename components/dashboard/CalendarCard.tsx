@@ -13,12 +13,16 @@ function formatDateOnly(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function getTodayDate() {
+  return new Date(`${formatDateOnly(new Date())}T00:00:00`);
+}
+
 type CalendarCardProps = {
   appointments?: AppointmentDTO[];
 };
 
 export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
-  const [date, setDate] = React.useState<Date | undefined>(undefined);
+  const [date, setDate] = React.useState<Date | undefined>(() => getTodayDate());
 
   const bookedDates = React.useMemo(() => {
     const unique = new Set(appointments.map((appointment) => appointment.appointment_date));
