@@ -1,7 +1,7 @@
 ﻿import { AppointmentStatus, BookingRequestDTO, SessionRole } from "@/lib/booking/contracts";
-import { InMemoryBookingRepository } from "@/lib/booking/in-memory-repository";
 import { BookingRepository } from "@/lib/booking/repository";
 import { SupabaseBookingRepository } from "@/lib/booking/supabase-repository";
+import { createMeetSpace } from "@/lib/google-meet/client";
 
 class BookingService {
   constructor(private repo: BookingRepository) {}
@@ -18,7 +18,7 @@ class BookingService {
     return this.repo.getAvailableCounselors(date, time);
   }
 
-  createAppointment(input: BookingRequestDTO) {
+  async createAppointment(input: BookingRequestDTO) {
     return this.repo.createAppointment(input);
   }
 
@@ -31,8 +31,29 @@ class BookingService {
     return this.repo.listAppointments(filter);
   }
 
-  updateAppointmentStatus(id: string, status: AppointmentStatus) {
-    return this.repo.updateAppointmentStatus(id, status);
+  getAppointmentById(appointmentId: string) {
+    return this.repo.getAppointmentById(appointmentId);
+  }
+
+  async updateAppointmentStatus(id: string, status: AppointmentStatus) {
+    let meetingLink: string | undefined;
+
+    if (status === "approved") {
+      const appointment = await this.repo.getAppointmentById(id);
+      if (appointment?.mode === "online") {
+        const counselorToken = await this.repo.getCounselorGoogleToken(appointment.counselor_id);
+        if (counselorToken) {
+          meetingLink = await createMeetSpace(counselorToken);
+          await this.repo.saveMeetLink(id, meetingLink, appointment.appointment_date);
+        } else {
+          console.warn(
+            `[booking] Counselor ${appointment.counselor_id} has no Google token. Meet link skipped.`,
+          );
+        }
+      }
+    }
+
+    return this.repo.updateAppointmentStatus(id, status, meetingLink);
   }
 
   listNotifications(role: SessionRole, userId?: string) {
@@ -49,13 +70,6 @@ class BookingService {
 }
 
 function createBookingRepository(): BookingRepository {
-  const mode = process.env.BOOKING_REPOSITORY?.toLowerCase();
-
-  if (mode === "memory") {
-    console.info("[booking] Using InMemoryBookingRepository");
-    return new InMemoryBookingRepository();
-  }
-
   console.info("[booking] Using SupabaseBookingRepository");
   return new SupabaseBookingRepository();
 }
