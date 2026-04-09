@@ -17,6 +17,32 @@ const iconMap: Record<NotificationType, React.ElementType> = {
   session_reminder_1d: Calendar,
 };
 
+const MEET_URL_RE = /(https:\/\/meet\.google\.com\/[^\s]+)/;
+
+function renderMessage(message: string) {
+  const match = MEET_URL_RE.exec(message);
+  if (!match) return message;
+
+  const [url] = match;
+  const [before, after] = message.split(url);
+
+  return (
+    <>
+      {before}
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="underline"
+        style={{ color: "var(--md-sys-color-primary)" }}
+      >
+        Join Meeting
+      </a>
+      {after}
+    </>
+  );
+}
+
 interface NotificationCardProps {
   notification: NotificationDTO;
   onMarkRead?: (notificationId: string) => void;
@@ -62,7 +88,7 @@ export default function NotificationCard({
               fontWeight: n.read ? 400 : 500,
             }}
           >
-            {n.message}
+            {renderMessage(n.message)}
           </p>
           <p
             className="text-xs"
