@@ -2,38 +2,44 @@
 
 import { BookingRequestDTO } from "@/lib/booking/contracts";
 import { bookingService } from "@/lib/booking/service";
+import { getSessionUser } from "@/lib/supabase/get-session-user";
 
+// cannonical time is utc
 function isPastAppointment(date: string, time: string) {
-  const scheduled = new Date(`${date}T${time}:00`);
+  const scheduled = new Date(`${date}T${time}:00Z`);
   return Number.isNaN(scheduled.getTime()) ? true : scheduled.getTime() < Date.now();
 }
 
 export async function GET(request: NextRequest) {
-  const role = request.nextUrl.searchParams.get("role") as "student" | "counselor" | null;
-  const studentId = request.nextUrl.searchParams.get("student_id") ?? undefined;
-  const counselorId = request.nextUrl.searchParams.get("counselor_id") ?? undefined;
-  const status = request.nextUrl.searchParams.get("status") ?? undefined;
-
-  if (!role) {
-    return NextResponse.json({ error: "Missing role" }, { status: 400 });
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const data = await bookingService.listAppointments({
-    role,
-    student_id: studentId,
-    counselor_id: counselorId,
-  });
+  const status = request.nextUrl.searchParams.get("status") ?? undefined;
 
-  const filtered = status ? data.filter((item) => item.status === status) : data;
+  const data = await bookingService.listAppointments(
+    sessionUser.role === "counselor"
+      ? { role: "counselor", counselor_id: sessionUser.userId, status: status as never }
+      : { role: "student", student_id: sessionUser.userId, status: status as never },
+  );
 
-  return NextResponse.json(filtered);
+  return NextResponse.json(data);
 }
 
 export async function POST(request: NextRequest) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (sessionUser.role !== "student") {
+    return NextResponse.json({ error: "Only students can create bookings" }, { status: 403 });
+  }
+
   const body = (await request.json()) as BookingRequestDTO;
 
   if (
-    !body?.student_id ||
     !body?.counselor_id ||
     !body?.appointment_date ||
     !body?.appointment_time ||
@@ -49,6 +55,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const created = await bookingService.createAppointment(body);
+  const created = await bookingService.createAppointment({
+    ...body,
+    student_id: sessionUser.userId,
+  });
   return NextResponse.json(created, { status: 201 });
 }
