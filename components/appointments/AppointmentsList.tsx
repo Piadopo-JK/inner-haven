@@ -46,6 +46,22 @@ export default function AppointmentsList({
             Mode: {item.mode}
             {item.reason ? <> &middot; Reason: {item.reason}</> : null}
           </p>
+          {item.mode === "online" &&
+            item.status === "approved" &&
+            item.meeting_link ? (
+            <a
+              href={item.meeting_link}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+              style={{
+                background: "var(--md-sys-color-primary)",
+                color: "var(--md-sys-color-on-primary)",
+              }}
+            >
+              Join Meeting
+            </a>
+          ) : null}
         </li>
       ))}
     </ul>
