@@ -8,7 +8,8 @@ import {
   SessionRole,
 } from "@/lib/booking/contracts";
 import { BookingRepository } from "@/lib/booking/repository";
-import { createClient } from "@/lib/supabase/server";
+import { encrypt, decrypt } from "@/lib/crypto";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 const defaultSlots = ["09:00", "10:00", "14:00", "15:00"];
 
@@ -59,7 +60,7 @@ function mapCounselorRowToDTO(row: CounselorRow): CounselorDirectoryItemDTO {
   };
 }
 
-function mapAppointmentRowToDTO(row: AppointmentRow): AppointmentDTO {
+function mapAppointmentRowToDTO(row: AppointmentRow, meetingLink?: string): AppointmentDTO {
   return {
     appointment_id: row.appointment_id,
     student_id: row.student_id,
@@ -71,6 +72,7 @@ function mapAppointmentRowToDTO(row: AppointmentRow): AppointmentDTO {
     status: row.status as AppointmentDTO["status"],
     created_at: row.created_at,
     updated_at: row.updated_at ?? row.created_at,
+    meeting_link: meetingLink,
   };
 }
 
@@ -88,14 +90,22 @@ function mapNotificationRowToDTO(row: NotificationRow): NotificationDTO {
 }
 
 export class SupabaseBookingRepository implements BookingRepository {
-  private async resolveStudentId(supabase: Awaited<ReturnType<typeof createClient>>, id: string) {
-    const { data: byPrimaryKey, error: byPrimaryKeyError } = await supabase
+  /**
+   * ID resolution uses the service client so that RLS policies on the
+   * students/counselors tables never silently block a lookup and cause the
+   * resolver to fall back to the raw auth UUID (which would then fail to
+   * match stored primary-key references throughout the DB).
+   */
+  private async resolveStudentId(id: string) {
+    const supabase = createServiceClient();
+
+    const { data: byPrimaryKey } = await supabase
       .from("students")
       .select("student_id")
       .eq("student_id", id)
       .maybeSingle();
 
-    if (!byPrimaryKeyError && byPrimaryKey?.student_id) {
+    if (byPrimaryKey?.student_id) {
       return byPrimaryKey.student_id as string;
     }
 
@@ -105,20 +115,24 @@ export class SupabaseBookingRepository implements BookingRepository {
       .eq("auth_user_id", id)
       .maybeSingle();
 
-    return (byAuth?.student_id as string | undefined) ?? id;
+    if (!byAuth?.student_id) {
+      console.warn(`[booking] Could not resolve student ID for: ${id}`);
+      return null;
+    }
+
+    return byAuth.student_id as string;
   }
 
-  private async resolveCounselorId(
-    supabase: Awaited<ReturnType<typeof createClient>>,
-    id: string,
-  ) {
-    const { data: byPrimaryKey, error: byPrimaryKeyError } = await supabase
+  private async resolveCounselorId(id: string) {
+    const supabase = createServiceClient();
+
+    const { data: byPrimaryKey } = await supabase
       .from("counselors")
       .select("counselor_id")
       .eq("counselor_id", id)
       .maybeSingle();
 
-    if (!byPrimaryKeyError && byPrimaryKey?.counselor_id) {
+    if (byPrimaryKey?.counselor_id) {
       return byPrimaryKey.counselor_id as string;
     }
 
@@ -128,7 +142,12 @@ export class SupabaseBookingRepository implements BookingRepository {
       .eq("auth_user_id", id)
       .maybeSingle();
 
-    return (byAuth?.counselor_id as string | undefined) ?? id;
+    if (!byAuth?.counselor_id) {
+      console.warn(`[booking] Could not resolve counselor ID for: ${id}`);
+      return null;
+    }
+
+    return byAuth.counselor_id as string;
   }
 
   async listCounselors(): Promise<CounselorDirectoryItemDTO[]> {
@@ -153,7 +172,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       .select("appointment_time")
       .eq("counselor_id", counselorId)
       .eq("appointment_date", date)
-      .in("status", ["pending", "approved"]);
+      .eq("status", "approved");
 
     if (error) throw error;
 
@@ -178,7 +197,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       .from("appointments")
       .select("counselor_id, appointment_time")
       .eq("appointment_date", date)
-      .in("status", ["pending", "approved"]);
+      .eq("status", "approved");
 
     if (error) throw error;
 
@@ -195,16 +214,18 @@ export class SupabaseBookingRepository implements BookingRepository {
   async createAppointment(input: BookingRequestDTO): Promise<AppointmentDTO> {
     const supabase = await createClient();
     const [studentId, counselorId] = await Promise.all([
-      this.resolveStudentId(supabase, input.student_id),
-      this.resolveCounselorId(supabase, input.counselor_id),
+      this.resolveStudentId(input.student_id),
+      this.resolveCounselorId(input.counselor_id),
     ]);
 
+    if (!studentId) throw new Error(`Could not resolve student: ${input.student_id}`);
+    if (!counselorId) throw new Error(`Could not resolve counselor: ${input.counselor_id}`);
     const { data: conflictingAppointments, error: conflictError } = await supabase
       .from("appointments")
       .select("appointment_id, appointment_time")
       .eq("counselor_id", counselorId)
       .eq("appointment_date", input.appointment_date)
-      .in("status", ["pending", "approved"]);
+      .eq("status", "approved");
 
     if (conflictError) throw conflictError;
 
@@ -271,12 +292,15 @@ export class SupabaseBookingRepository implements BookingRepository {
   }): Promise<AppointmentDTO[]> {
     const supabase = await createClient();
     const [resolvedStudentId, resolvedCounselorId] = await Promise.all([
-      filter.student_id ? this.resolveStudentId(supabase, filter.student_id) : Promise.resolve(undefined),
+      filter.student_id ? this.resolveStudentId(filter.student_id) : Promise.resolve(undefined),
       filter.counselor_id
-        ? this.resolveCounselorId(supabase, filter.counselor_id)
+        ? this.resolveCounselorId(filter.counselor_id)
         : Promise.resolve(undefined),
     ]);
 
+    // If resolution failed for the requested identity, there are no appointments to return.
+    if (filter.role === "student" && filter.student_id && !resolvedStudentId) return [];
+    if (filter.role === "counselor" && filter.counselor_id && !resolvedCounselorId) return [];
     let query = supabase
       .from("appointments")
       .select("*")
@@ -298,12 +322,86 @@ export class SupabaseBookingRepository implements BookingRepository {
     const { data, error } = await query;
     if (error) throw error;
 
-    return ((data ?? []) as AppointmentRow[]).map(mapAppointmentRowToDTO);
+    const rows = (data ?? []) as AppointmentRow[];
+    if (rows.length === 0) return [];
+
+    const appointmentIds = rows.map((r) => r.appointment_id);
+    const { data: meetLinkRows, error: meetLinkError } = await supabase
+      .from("meet_links")
+      .select("appointment_id, link_url")
+      .in("appointment_id", appointmentIds);
+
+    if (meetLinkError) console.error("Failed to fetch meet links", meetLinkError);
+    const meetLinkMap = new Map<string, string>(
+      ((meetLinkRows ?? []) as { appointment_id: string; link_url: string }[]).map(
+        (r) => [r.appointment_id, r.link_url],
+      ),
+    );
+
+    return rows.map((row) => mapAppointmentRowToDTO(row, meetLinkMap.get(row.appointment_id)));
+  }
+
+  async getAppointmentById(appointmentId: string): Promise<AppointmentDTO | null> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("appointment_id", appointmentId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return mapAppointmentRowToDTO(data as AppointmentRow);
+  }
+
+  async saveMeetLink(
+    appointmentId: string,
+    linkUrl: string,
+    availableDate: string,
+  ): Promise<void> {
+    const supabase = await createClient();
+    const { error } = await supabase.from("meet_links").insert({
+      appointment_id: appointmentId,
+      link_url: linkUrl,
+      available_date: availableDate,
+      generated_at: new Date().toISOString(),
+    });
+
+    if (error) throw error;
+  }
+
+  async getCounselorGoogleToken(counselorId: string): Promise<string | null> {
+    const resolvedId = await this.resolveCounselorId(counselorId);
+    if (!resolvedId) return null;
+    const supabase = createServiceClient();
+
+    const { data, error } = await supabase
+      .from("counselors")
+      .select("google_refresh_token")
+      .eq("counselor_id", resolvedId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Failed to fetch counselor Google token", error);
+      return null;
+    }
+
+    const stored = data?.google_refresh_token as string | null | undefined;
+    if (!stored) return null;
+
+    try {
+      return decrypt(stored);
+    } catch {
+      console.error("Failed to decrypt counselor Google token");
+      return null;
+    }
   }
 
   async updateAppointmentStatus(
     appointmentId: string,
     status: AppointmentStatus,
+    meetingLink?: string,
   ): Promise<AppointmentDTO | null> {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -323,12 +421,17 @@ export class SupabaseBookingRepository implements BookingRepository {
       const type = status === "approved" ? "booking_approved" : "booking_declined";
       const verb = status === "approved" ? "approved" : "declined";
 
+      let message = `Your booking for ${appointment.appointment_date} at ${appointment.appointment_time} has been ${verb}`;
+      if (status === "approved" && meetingLink) {
+        message += `. Join your online session: ${meetingLink}`;
+      }
+
       const { error: notificationsError } = await supabase.from("notifications").insert({
         recipient_id: appointment.student_id,
         recipient_role: "student",
         type,
         appointment_id: appointmentId,
-        message: `Your booking for ${appointment.appointment_date} at ${appointment.appointment_time} has been ${verb}`,
+        message,
         sent_at: now,
         read: false,
       });
@@ -345,25 +448,23 @@ export class SupabaseBookingRepository implements BookingRepository {
     role: SessionRole,
     userId?: string,
   ): Promise<NotificationDTO[]> {
+    if (!userId) return [];
+
     const supabase = await createClient();
     const resolvedUserId =
-      userId && role === "student"
-        ? await this.resolveStudentId(supabase, userId)
-        : userId && role === "counselor"
-          ? await this.resolveCounselorId(supabase, userId)
-          : userId;
+      role === "student"
+        ? await this.resolveStudentId(userId)
+        : await this.resolveCounselorId(userId);
 
-    let query = supabase
+    if (!resolvedUserId) return [];
+
+    const { data, error } = await supabase
       .from("notifications")
       .select("*")
       .eq("recipient_role", role)
+      .eq("recipient_id", resolvedUserId)
       .order("sent_at", { ascending: false });
 
-    if (resolvedUserId) {
-      query = query.eq("recipient_id", resolvedUserId);
-    }
-
-    const { data, error } = await query;
     if (error) throw error;
 
     return ((data ?? []) as NotificationRow[]).map(mapNotificationRowToDTO);
@@ -390,25 +491,23 @@ export class SupabaseBookingRepository implements BookingRepository {
     role: SessionRole,
     userId?: string,
   ): Promise<number> {
+    if (!userId) return 0;
+
     const supabase = await createClient();
     const resolvedUserId =
-      userId && role === "student"
-        ? await this.resolveStudentId(supabase, userId)
-        : userId && role === "counselor"
-          ? await this.resolveCounselorId(supabase, userId)
-          : userId;
+      role === "student"
+        ? await this.resolveStudentId(userId)
+        : await this.resolveCounselorId(userId);
 
-    let query = supabase
+    if (!resolvedUserId) return 0;
+
+    const { count, error } = await supabase
       .from("notifications")
       .select("notification_id", { count: "exact", head: true })
       .eq("recipient_role", role)
+      .eq("recipient_id", resolvedUserId)
       .eq("read", false);
 
-    if (resolvedUserId) {
-      query = query.eq("recipient_id", resolvedUserId);
-    }
-
-    const { count, error } = await query;
     if (error) throw error;
 
     return count ?? 0;

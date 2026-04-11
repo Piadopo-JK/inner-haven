@@ -40,6 +40,7 @@ export type AppointmentDTO = {
   status: AppointmentStatus;
   created_at: string;
   updated_at: string;
+  meeting_link?: string;
 };
 
 export type AvailabilitySlotDTO = {
