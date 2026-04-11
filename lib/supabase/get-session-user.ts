@@ -9,30 +9,10 @@ export type SessionUser = {
 };
 
 /**
- * DEV BYPASS: When running locally without a Supabase session, set
- * DEV_ROLE=student or DEV_ROLE=counselor in .env.local to skip auth.
- * student  -> "00000000-0000-0000-0000-000000000001"
- * counselor -> "00000000-0000-0000-0000-000000000002"
- */
-function getDevBypassUser(): SessionUser | null {
-  if (process.env.NODE_ENV !== "development") return null;
-  const devRole = process.env.DEV_ROLE as SessionRole | undefined;
-  if (!devRole) return null;
-  const role: SessionRole = devRole === "counselor" ? "counselor" : "student";
-  return {
-    userId:
-      role === "counselor"
-        ? "00000000-0000-0000-0000-000000000002"
-        : "00000000-0000-0000-0000-000000000001",
-    role,
-    email: undefined,
-  };
-}
-
-/**
-swap this to lookup
-the role from the `students` or `counselors` table by `auth_user_id` instead
-of relying solely on metadata.
+ * Determines role by checking the counselors table for a matching auth_user_id.
+ * Falls back to "student" if no counselor row is found.
+ * This is more reliable than reading user_metadata, which can be inconsistent
+ * depending on how the metadata was set (dashboard vs sign-up flow).
  **/
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = await createClient();
@@ -40,10 +20,15 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return getDevBypassUser();
+  if (!user) return null;
 
-  const rawRole = user.user_metadata?.role as string | undefined;
-  const role: SessionRole = rawRole === "counselor" ? "counselor" : "student";
+  const { data: counselorRow } = await supabase
+    .from("counselors")
+    .select("counselor_id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+
+  const role: SessionRole = counselorRow ? "counselor" : "student";
 
   return {
     userId: user.id,
