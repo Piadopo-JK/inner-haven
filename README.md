@@ -12,9 +12,22 @@
 | IH.010.002            | 2026-03-07    |
 | IH.010.003            | 2026-03-13    |
 | IH.010.004            | 2026-03-25    |
+| IH.010.005            | 2026-04-10    |
 | ...                   | ...           |
 
 ---
+## [IH.010.005](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+- enforce session auth, role checks, and identity scoping on all API routes and server actions
+- harden booking repository ID resolution and use service-role Supabase client
+- add Google OAuth 2.0 flow for counselors and secure token storage
+- add /settings page for managing Google integration
+- update dashboard banner to only show connect prompt when not linked
+- show “Join Meeting” buttons in appointments list for approved online sessions
+- render Google Meet links in notification cards
+- fix CalendarCard to receive actual appointment data, rendering booked dates correctly
+- replace SPA navigation with full page navigation after auth transitions
+- convert profile menu to anchored dropdown with Settings and Log out actions
 
 ## [IH.010.004](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
