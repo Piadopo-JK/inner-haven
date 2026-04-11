@@ -4,15 +4,19 @@ import { ThemeProvider } from "next-themes";
 import Navbar from "@/components/nav/Navbar";
 import "./globals.css";
 
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+const defaultUrl = process.env.NEXT_PUBLIC_APP_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 
-export const metadata: Metadata = {
-  metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
-};
+export const metadata: Metadata = defaultUrl
+  ? {
+    metadataBase: new URL(defaultUrl),
+    title: "Next.js and Supabase Starter Kit",
+    description: "The fastest way to build apps with Next.js and Supabase",
+  }
+  : {
+    title: "Next.js and Supabase Starter Kit",
+    description: "The fastest way to build apps with Next.js and Supabase",
+  };
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
