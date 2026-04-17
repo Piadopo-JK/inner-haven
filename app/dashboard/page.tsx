@@ -78,6 +78,17 @@ async function CounselorView({ counselorId }: { counselorId: string }) {
 // Student view
 
 async function StudentView({ studentId }: { studentId: string }) {
+  const supabase = createServiceClient();
+  const { data: studentRow } = await supabase
+    .from("students")
+    .select("student_id")
+    .eq("auth_user_id", studentId)
+    .maybeSingle();
+
+  if (!studentRow) {
+    redirect("/onboarding");
+  }
+
   const [counselors, appointments] = await Promise.all([
     bookingService.listCounselors(),
     bookingService.listAppointments({ role: "student", student_id: studentId }),
