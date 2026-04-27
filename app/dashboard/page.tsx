@@ -1,70 +1,107 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300; //5 minutes
 
 import { bookingService } from "@/lib/booking/service";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
-import { createServiceClient } from "@/lib/supabase/server";
 import CalendarCard from "@/components/dashboard/CalendarCard";
-import CounselorSummaryCard from "@/components/counselor/CounselorSummaryCard";
-import PendingRequestsCard from "@/components/counselor/PendingRequestsCard";
 import TodayOverviewCard from "@/components/counselor/TodayOverviewCard";
 import GoogleConnectBanner from "@/components/counselor/GoogleConnectBanner";
-import LandingMessage from "@/components/dashboard/LandingMessage";
-import NextAppointmentCard from "@/components/dashboard/NextAppointmentCard";
-import WelcomeCard from "@/components/dashboard/WelcomeCard";
+import CounselorAppointmentsCard from "@/components/counselor/CounselorAppointmentsCard";
+import CounselorWelcomeHeader from "@/components/counselor/CounselorWelcomeHeader";
+import CounselorStatsRow from "@/components/counselor/CounselorStatsRow";
+import StudentWelcomeHeader from "@/components/dashboard/StudentWelcomeHeader";
+import StudentStatsRow from "@/components/dashboard/StudentStatsRow";
 import NextSessionCard from "@/components/dashboard/NextSessionCard";
-import UpcomingAppointmentsCard from "@/components/dashboard/UpcomingAppointmentsCard";
-import QuickActionCard from "@/components/dashboard/QuickActionCard";
+import StudentAppointmentsCard from "@/components/dashboard/StudentAppointmentsCard";
 import CounselorListCard from "@/components/dashboard/CounselorListCard";
 import RecentMessagesCard from "@/components/dashboard/RecentMessagesCard";
+import BookingFAB from "@/components/dashboard/BookingFAB";
+
 
 export default async function DashboardPage() {
   const sessionUser = await getSessionUser();
+  const todayIso = new Date().toISOString().split("T")[0];
 
   if (!sessionUser) {
     redirect("/auth/login");
   }
 
   if (sessionUser.role === "counselor") {
-    return <CounselorView counselorId={sessionUser.userId} />;
+    const counselorName = sessionUser.email?.split("@")[0] || "Counselor";
+    return <CounselorView counselorId={sessionUser.userId} counselorName={counselorName} todayIso={todayIso} />;
   }
 
-  return <StudentView studentId={sessionUser.userId} />;
+  const userName = sessionUser.email?.split("@")[0] || "Student";
+  return <StudentView studentId={sessionUser.userId} userName={userName} todayIso={todayIso} />;
 }
 
 // Counselor view
 
-async function CounselorView({ counselorId }: { counselorId: string }) {
-  const today = new Date().toISOString().split("T")[0];
-
-  const supabase = createServiceClient();
-
-  const [pendingItems, allItems, counselorRow] = await Promise.all([
-    bookingService.listAppointments({ role: "counselor", counselor_id: counselorId, status: "pending" }),
+async function CounselorView({
+  counselorId,
+  counselorName,
+  todayIso,
+}: {
+  counselorId: string;
+  counselorName: string;
+  todayIso: string;
+}) {
+  const [allItems, counselorGoogleToken, unreadMessages, students] = await Promise.all([
     bookingService.listAppointments({ role: "counselor", counselor_id: counselorId }),
-    supabase
-      .from("counselors")
-      .select("counselor_id, google_refresh_token")
-      .eq("auth_user_id", counselorId)
-      .maybeSingle()
-      .then(({ data }) => data),
+    bookingService.getCounselorGoogleToken(counselorId),
+    bookingService.countUnreadNotifications("counselor", counselorId),
+    bookingService.listStudents(),
   ]);
 
-  const isGoogleConnected = !!counselorRow?.google_refresh_token;
+  const isGoogleConnected = !!counselorGoogleToken;
 
-  const todayItems = allItems.filter((item) => item.appointment_date === today);
+  const pendingItems = allItems.filter((item) => item.status === "pending");
+  const todayItems = allItems.filter((item) => item.appointment_date === todayIso);
   const todayPending = todayItems.filter((item) => item.status === "pending").length;
   const todayScheduled = todayItems.filter((item) => item.status === "approved").length;
+  const completedCount = allItems.filter((item) => item.status === "completed").length;
+  const upcomingApprovedCount = allItems.filter(
+    (item) => item.status === "approved" && item.appointment_date >= todayIso,
+  ).length;
+  const nextSession = allItems
+    .filter((item) => item.status === "approved" && item.appointment_date >= todayIso)
+    .sort((a, b) => {
+      const aTime = `${a.appointment_date}T${a.appointment_time}`;
+      const bTime = `${b.appointment_date}T${b.appointment_time}`;
+      return aTime.localeCompare(bTime);
+    })[0];
+
+  const studentForNextSession = nextSession
+    ? students.find((student) => student.student_id === nextSession.student_id)
+    : undefined;
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl gap-4 p-4">
-      <GoogleConnectBanner isConnected={isGoogleConnected} />
-      <CounselorSummaryCard />
-      <section className="grid gap-4 md:grid-cols-2">
-        <PendingRequestsCard items={pendingItems} />
-        <div className="grid gap-4 content-start">
+    <main className="mx-auto w-full max-w-7xl flex flex-col gap-4 p-3 md:p-4">
+      <CounselorWelcomeHeader name={counselorName} />
+
+      <CounselorStatsRow
+        pending={pendingItems.length}
+        upcomingApproved={upcomingApprovedCount}
+        completed={completedCount}
+        messages={unreadMessages}
+      />
+
+      <NextSessionCard
+        appointment={nextSession}
+        participantName={studentForNextSession?.name || "Student"}
+        participantAvatar={studentForNextSession?.avatar_url}
+        todayIso={todayIso}
+      />
+
+      <section className="grid gap-6 md:grid-cols-[1fr_350px]">
+        <div className="flex flex-col gap-6">
+          <CounselorAppointmentsCard appointments={allItems} todayIso={todayIso} students={students} />
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <GoogleConnectBanner isConnected={isGoogleConnected} />
           <Suspense fallback={null}>
             <CalendarCard appointments={allItems} />
           </Suspense>
@@ -77,30 +114,70 @@ async function CounselorView({ counselorId }: { counselorId: string }) {
 
 // Student view
 
-async function StudentView({ studentId }: { studentId: string }) {
-  const [counselors, appointments] = await Promise.all([
+async function StudentView({
+  studentId,
+  userName,
+  todayIso,
+}: {
+  studentId: string;
+  userName: string;
+  todayIso: string;
+}) {
+  const [counselors, appointments, unreadMessages] = await Promise.all([
     bookingService.listCounselors(),
     bookingService.listAppointments({ role: "student", student_id: studentId }),
+    bookingService.countUnreadNotifications("student", studentId),
   ]);
 
-  return (
-    <main className="mx-auto grid w-full max-w-7xl gap-4 p-4">
-      <div className="surface-band">
-        <section className="mx-auto grid w-full max-w-7xl gap-4 px-4 md:grid-cols-2">
-          <LandingMessage />
-          <NextAppointmentCard />
-        </section>
-      </div>
+  const upcomingCount = appointments.filter((appointment) => {
+    return appointment.appointment_date >= todayIso
+      && (appointment.status === "approved" || appointment.status === "pending");
+  }).length;
+  const completedCount = appointments.filter(a => a.status === 'completed').length;
+  
+  // find the next session
+  const nextSession = appointments
+    .filter((appointment) => appointment.status === "approved" && appointment.appointment_date >= todayIso)
+    .sort((a, b) => {
+      const aTime = `${a.appointment_date}T${a.appointment_time}`;
+      const bTime = `${b.appointment_date}T${b.appointment_time}`;
+      return aTime.localeCompare(bTime);
+    })[0];
 
-      <section className="dashboard-bottom-row grid gap-4 md:grid-cols-2">
-        <div className="grid gap-4">
-          <WelcomeCard />
-          <NextSessionCard />
-          <UpcomingAppointmentsCard />
-          <QuickActionCard />
+  const counselorForNextSession = nextSession 
+    ? counselors.find(c => c.counselor_id === nextSession.counselor_id)
+    : undefined;
+
+  return (
+    <main className="mx-auto w-full max-w-7xl flex flex-col gap-6 p-4">
+      <StudentWelcomeHeader name={userName} />
+
+      <StudentStatsRow 
+        upcoming={upcomingCount} 
+        messages={unreadMessages}
+        counselors={0}
+        counselorIds={counselors.map((c) => c.counselor_id)}
+        completed={completedCount} 
+      />
+
+      <NextSessionCard 
+        appointment={nextSession} 
+        participantName={counselorForNextSession?.name || "Counselor"}
+        participantAvatar={counselorForNextSession?.avatar_url}
+        todayIso={todayIso}
+        showParticipantOnlineStatus
+      />
+
+      <section className="grid gap-4 md:grid-cols-[1fr_350px]">
+        <div className="flex flex-col gap-4">
+          <StudentAppointmentsCard
+            appointments={appointments}
+            todayIso={todayIso}
+            counselors={counselors}
+          />
         </div>
 
-        <div className="grid gap-4">
+        <div className="flex flex-col gap-4">
           <Suspense fallback={null}>
             <CalendarCard appointments={appointments} />
           </Suspense>
@@ -108,6 +185,7 @@ async function StudentView({ studentId }: { studentId: string }) {
           <RecentMessagesCard />
         </div>
       </section>
+      <BookingFAB />
     </main>
   );
 }
