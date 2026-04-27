@@ -1,50 +1,86 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
+import SettingsSidebar from "@/components/settings/SettingsSidebar";
+import CounselorScheduleSettingsCard from "@/components/settings/CounselorScheduleSettingsCard";
 import GoogleTokenSettingsCard from "@/components/settings/GoogleTokenSettingsCard";
+import ProfileAppearanceSettingsCard from "@/components/settings/ProfileAppearanceSettingsCard";
+import { bookingService } from "@/lib/booking/service";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
-import { createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+async function GoogleTokenCardAsync({ isConnected }: { isConnected: boolean }) {
+  return <GoogleTokenSettingsCard isConnected={isConnected} />;
+}
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
   const sessionUser = await getSessionUser();
 
   if (!sessionUser) {
     redirect("/auth/login");
   }
 
+  const params = await searchParams;
+  const activeCategory = (params.category || "profile") as "profile" | "schedule" | "integrations";
+
   let isGoogleConnected = false;
 
   if (sessionUser.role === "counselor") {
-    const supabase = createServiceClient();
-    const { data: counselorRow } = await supabase
-      .from("counselors")
-      .select("google_refresh_token")
-      .eq("auth_user_id", sessionUser.userId)
-      .maybeSingle();
-
-    isGoogleConnected = !!counselorRow?.google_refresh_token;
+    const googleToken = await bookingService.getCounselorGoogleToken(sessionUser.userId);
+    isGoogleConnected = !!googleToken;
   }
 
   return (
-    <main className="mx-auto grid w-full max-w-3xl gap-4 p-4">
-      <section>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage account-level preferences and connected integrations.
-        </p>
-      </section>
+    <main
+      className="flex flex-col md:flex-row gap-6 mx-auto w-full max-w-5xl px-4 py-6"
+      style={{ background: "var(--md-sys-color-background)" }}
+    >
+      <SettingsSidebar userRole={sessionUser.role} />
 
-      {sessionUser.role === "counselor" ? (
-        <GoogleTokenSettingsCard isConnected={isGoogleConnected} />
-      ) : (
-        <section
-          className="rounded-xl border p-5 text-sm text-muted-foreground"
-          style={{ borderColor: "var(--md-sys-color-outline-variant)" }}
-        >
-          Student account settings are not configurable yet.
-        </section>
-      )}
+      <section className="flex-1 space-y-4">
+        {(activeCategory === "profile" || !["schedule", "integrations"].includes(activeCategory)) && (
+          <>
+            <div>
+              <h1 className="text-2xl font-semibold">Profile & Appearance</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Manage your profile information and how you appear to others.
+              </p>
+            </div>
+            <ProfileAppearanceSettingsCard />
+          </>
+        )}
+
+        {activeCategory === "schedule" && sessionUser.role === "counselor" && (
+          <>
+            <div>
+              <h1 className="text-2xl font-semibold">Booking Schedule</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Set your availability and configure booking time slots.
+              </p>
+            </div>
+            <CounselorScheduleSettingsCard />
+          </>
+        )}
+
+        {activeCategory === "integrations" && sessionUser.role === "counselor" && (
+          <>
+            <div>
+              <h1 className="text-2xl font-semibold">Integrations</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Connect third-party services to enhance your experience.
+              </p>
+            </div>
+            <Suspense fallback={<div>Loading...</div>}>
+              <GoogleTokenCardAsync isConnected={isGoogleConnected} />
+            </Suspense>
+          </>
+        )}
+      </section>
     </main>
   );
 }

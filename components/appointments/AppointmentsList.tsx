@@ -1,4 +1,5 @@
 import { AppointmentDTO } from "@/lib/booking/contracts";
+import { TruncatedText } from "@/components/ui/truncated-text";
 
 const statusColors: Record<AppointmentDTO["status"], string> = {
   pending:
@@ -10,6 +11,20 @@ const statusColors: Record<AppointmentDTO["status"], string> = {
   completed:
     "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]",
 };
+
+function formatDisplayTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) {
+    return rawTime;
+  }
+
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
 
 export default function AppointmentsList({
   appointments,
@@ -34,7 +49,7 @@ export default function AppointmentsList({
         >
           <div className="flex items-center justify-between">
             <p className="font-medium text-[var(--md-sys-color-on-surface)]">
-              {item.appointment_date} at {item.appointment_time}
+              {item.appointment_date} at {formatDisplayTime(item.appointment_time)}
             </p>
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[item.status]}`}
@@ -44,7 +59,11 @@ export default function AppointmentsList({
           </div>
           <p className="mt-1 text-xs text-[var(--md-sys-color-on-surface-variant)]">
             Mode: {item.mode}
-            {item.reason ? <> &middot; Reason: {item.reason}</> : null}
+            {item.reason ? (
+              <>
+                {" "}&middot; Reason: <TruncatedText text={item.reason_preview || item.reason} lines={1} className="text-[var(--md-sys-color-on-surface)]" />
+              </>
+            ) : null}
           </p>
           {item.mode === "online" &&
             item.status === "approved" &&
