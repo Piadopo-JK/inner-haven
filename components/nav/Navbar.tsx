@@ -1,17 +1,9 @@
-import Link from "next/link";
-
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 import { bookingService } from "@/lib/booking/service";
 import NotificationBell from "@/components/nav/NotificationBell";
 import HamburgerMenu from "@/components/nav/HamburgerMenu";
 import ProfileMenu from "@/components/nav/ProfileMenu";
-
-const navLinks = [
-  { label: "Home", href: "/dashboard" },
-  { label: "About", href: "/about" },
-  { label: "Services", href: "/services" },
-  { label: "Contact", href: "/contact" },
-];
+import CounselorHeartbeat from "@/components/layout/CounselorHeartbeat";
 
 export default async function Navbar() {
   const sessionUser = await getSessionUser();
@@ -26,49 +18,32 @@ export default async function Navbar() {
   const recent = recentNotifications.slice(0, 5);
 
   return (
-    <nav
-      className="sticky top-0 z-50 w-full border-b"
+    <>
+      {sessionUser.role === "counselor" && <CounselorHeartbeat />}
+      <nav
+      className="sticky top-0 z-40 w-full border-b"
       style={{
         background: "var(--md-sys-color-surface)",
         borderColor: "var(--md-sys-color-outline-variant)",
       }}
     >
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
-        {/*  logo placeholder */}
-        <Link
-          href="/dashboard"
-          className="text-base font-semibold shrink-0"
-          style={{ color: "var(--md-sys-color-on-surface)" }}
-        >
-          GuidanceGo
-        </Link>
-
-        <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:text-primary"
-            >
-              <span className="text-foreground">{link.label}</span>
-            </Link>
-          ))}
+      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 md:px-6">
+        <div className="flex items-center gap-2">
+          <div className="md:hidden">
+            <HamburgerMenu />
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 md:gap-2">
           <NotificationBell
             unreadCount={unreadCount}
             recentNotifications={recent}
           />
 
           <ProfileMenu />
-
-          {/* mobile profile replacement */}
-          <div className="md:hidden">
-            <HamburgerMenu />
-          </div>
         </div>
       </div>
-    </nav>
+      </nav>
+    </>
   );
 }
