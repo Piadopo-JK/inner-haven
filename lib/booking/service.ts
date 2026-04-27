@@ -1,4 +1,9 @@
-﻿import { AppointmentStatus, BookingRequestDTO, SessionRole } from "@/lib/booking/contracts";
+import {
+  AppointmentStatus,
+  BookingRequestDTO,
+  CounselorScheduleRuleInputDTO,
+  SessionRole,
+} from "@/lib/booking/contracts";
 import { BookingRepository } from "@/lib/booking/repository";
 import { SupabaseBookingRepository } from "@/lib/booking/supabase-repository";
 import { createMeetSpace } from "@/lib/google-meet/client";
@@ -10,8 +15,16 @@ class BookingService {
     return this.repo.listCounselors();
   }
 
+  listStudents() {
+    return this.repo.listStudents();
+  }
+
   getAvailability(counselorId: string, date: string) {
     return this.repo.getAvailability(counselorId, date);
+  }
+
+  getAvailabilityRange(counselorId: string, fromDate: string, toDate: string) {
+    return this.repo.getAvailabilityRange(counselorId, fromDate, toDate);
   }
 
   getAvailableCounselors(date: string, time: string) {
@@ -20,6 +33,10 @@ class BookingService {
 
   async createAppointment(input: BookingRequestDTO) {
     return this.repo.createAppointment(input);
+  }
+
+  updateAppointment(id: string, input: BookingRequestDTO) {
+    return this.repo.updateAppointment(id, input);
   }
 
   listAppointments(filter: {
@@ -44,7 +61,7 @@ class BookingService {
         const counselorToken = await this.repo.getCounselorGoogleToken(appointment.counselor_id);
         if (counselorToken) {
           meetingLink = await createMeetSpace(counselorToken);
-          await this.repo.saveMeetLink(id, meetingLink, appointment.appointment_date);
+          await this.repo.saveMeetLink(id, meetingLink);
         } else {
           console.warn(
             `[booking] Counselor ${appointment.counselor_id} has no Google token. Meet link skipped.`,
@@ -54,6 +71,10 @@ class BookingService {
     }
 
     return this.repo.updateAppointmentStatus(id, status, meetingLink);
+  }
+
+  rescheduleAppointment(id: string, appointmentDate: string, appointmentTime: string) {
+    return this.repo.rescheduleAppointment(id, appointmentDate, appointmentTime);
   }
 
   listNotifications(role: SessionRole, userId?: string) {
@@ -66,6 +87,22 @@ class BookingService {
 
   countUnreadNotifications(role: SessionRole, userId?: string) {
     return this.repo.countUnreadNotifications(role, userId);
+  }
+
+  getCounselorGoogleToken(counselorId: string) {
+    return this.repo.getCounselorGoogleToken(counselorId);
+  }
+
+  resolveCounselorId(id: string) {
+    return this.repo.resolveCounselorId(id);
+  }
+
+  getCounselorSchedule(counselorId: string) {
+    return this.repo.getCounselorSchedule(counselorId);
+  }
+
+  upsertCounselorSchedule(counselorId: string, rules: CounselorScheduleRuleInputDTO[]) {
+    return this.repo.upsertCounselorSchedule(counselorId, rules);
   }
 }
 
