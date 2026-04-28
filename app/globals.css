@@ -6,10 +6,10 @@
   /*  MD3 Color Tokens (light scheme) */
 
   /* Primary */
-  --md-sys-color-primary: #6750a4;
+  --md-sys-color-primary: #006967;
   --md-sys-color-on-primary: #ffffff;
-  --md-sys-color-primary-container: #eaddff;
-  --md-sys-color-on-primary-container: #21005d;
+  --md-sys-color-primary-container: #e0f2f1;
+  --md-sys-color-on-primary-container: #004d40;
 
   /* Secondary */
   --md-sys-color-secondary: #625b71;
@@ -56,6 +56,14 @@
   --md-sys-elevation-level1: 0 1px 2px rgba(0, 0, 0, 0.14);
   --md-sys-elevation-level2: 0 2px 6px rgba(0, 0, 0, 0.16);
   --md-sys-elevation-level3: 0 4px 8px rgba(0, 0, 0, 0.18);
+
+  --guidance-sidebar-bg: #f8fafc;
+  --guidance-sidebar-text: #64748b;
+  --guidance-sidebar-active-bg: #f0fdfa;
+  --guidance-sidebar-active-text: #0d9488;
+  --guidance-sidebar-hover-bg: #f1f5f9;
+  --guidance-sidebar-divider: #e2e8f0;
+  --guidance-logout-text: #b91c1c;
 }
 
 @layer base {
@@ -74,7 +82,7 @@
     --popover-foreground: 265 8% 12%; /* #1d1b20                                  */
 
     /* brand */
-    --primary: 256 34% 48%;           /* #6750a4  md-sys-color-primary            */
+    --primary: 179 100% 21%;          /* #006967  md-sys-color-primary            */
     --primary-foreground: 0 0% 100%;  /* #ffffff  md-sys-color-on-primary         */
 
     /* secondary = secondary-container (light tint) */
@@ -96,7 +104,7 @@
     /* borders & inputs */
     --border: 269 11% 79%;            /* #cac4d0  md-sys-color-outline-variant    */
     --input: 276 39% 95%;             /* #f3edf7  md-sys-color-surface-container  */
-    --ring: 256 34% 48%;              /* #6750a4  md-sys-color-primary            */
+    --ring: 179 100% 21%;             /* #006967  md-sys-color-primary            */
 
     --radius: 0.5rem;
   }
@@ -122,6 +130,14 @@
     --border: 265 8% 28%;
     --input: 265 8% 22%;
     --ring: 265 100% 81%;
+
+    --guidance-sidebar-bg: #0f172a;
+    --guidance-sidebar-text: #cbd5e1;
+    --guidance-sidebar-active-bg: #0b2b2a;
+    --guidance-sidebar-active-text: #5eead4;
+    --guidance-sidebar-hover-bg: #1e293b;
+    --guidance-sidebar-divider: #334155;
+    --guidance-logout-text: #f87171;
   }
 }
 
