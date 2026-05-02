@@ -1,20 +1,21 @@
 import { ArrowLeft, Calendar, Clock, Video } from "lucide-react";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import SessionDetailsActions from "@/components/appointments/SessionDetailsActions";
+import SessionDetailsActions, { SessionStatusPill } from "@/components/appointments/SessionDetailsActions";
+import { TruncatedText } from "@/components/ui/truncated-text";
+import { getAppointmentByIdCached, getSessionNoteCached } from "@/lib/cache/appointments-cache";
 import { bookingService } from "@/lib/booking/service";
+import { makeQueryClient } from "@/lib/query/client";
+import {
+  appointmentDetailsQueryOptions,
+  sessionNotesQueryOptions,
+} from "@/lib/query/queries";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 
 type AppointmentDetailsPageProps = {
   params: Promise<{ appointmentId: string }>;
-};
-
-const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  pending:   { bg: "var(--md-sys-color-secondary-container)", color: "var(--md-sys-color-on-secondary-container)", label: "Pending" },
-  approved:  { bg: "#d1fae5", color: "#065f46", label: "Approved" },
-  cancelled: { bg: "#fee2e2", color: "#991b1b", label: "Cancelled" },
-  completed: { bg: "#dbeafe", color: "#1e40af", label: "Completed" },
 };
 
 export default async function AppointmentDetailsPage({ params }: AppointmentDetailsPageProps) {
@@ -23,18 +24,24 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
 
   const { appointmentId } = await params;
 
-  const [ownAppointments, counselors, students] = await Promise.all([
-    bookingService.listAppointments(
-      sessionUser.role === "counselor"
-        ? { role: "counselor", counselor_id: sessionUser.userId }
-        : { role: "student", student_id: sessionUser.userId },
-    ),
+  const [appointment, counselors, students, currentSessionNote] = await Promise.all([
+    getAppointmentByIdCached(sessionUser.role, sessionUser.userId, appointmentId),
     sessionUser.role === "student" ? bookingService.listCounselors() : Promise.resolve([]),
     sessionUser.role === "counselor" ? bookingService.listStudents() : Promise.resolve([]),
+    getSessionNoteCached(sessionUser.role, sessionUser.userId, appointmentId),
   ]);
 
-  const appointment = ownAppointments.find((a) => a.appointment_id === appointmentId);
   if (!appointment) redirect("/appointments");
+
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentDetailsQueryOptions(appointmentId).queryKey,
+    appointment,
+  );
+  queryClient.setQueryData(
+    sessionNotesQueryOptions(appointmentId).queryKey,
+    { note: currentSessionNote },
+  );
 
   const counselorSchedule = await bookingService.getCounselorSchedule(appointment.counselor_id);
   const dayOfWeek = new Date(`${appointment.appointment_date}T00:00:00Z`).getUTCDay();
@@ -72,19 +79,18 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
     .join("")
     .toUpperCase();
 
-  const statusStyle = STATUS_STYLES[appointment.status] ?? STATUS_STYLES.pending;
-
   const dateDisplay = new Date(`${appointment.appointment_date}T00:00:00Z`).toLocaleDateString(
     "en-US",
     { weekday: "long", month: "short", day: "numeric", year: "numeric" },
   );
 
   return (
-    <main
-      className="min-h-screen px-4 py-8 md:px-8"
-      style={{ background: "var(--md-sys-color-background)" }}
-    >
-      <div className="mx-auto w-full max-w-5xl">
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <main
+        className="min-h-screen px-4 py-8 md:px-8"
+        style={{ background: "var(--md-sys-color-background)" }}
+      >
+        <div className="mx-auto w-full max-w-5xl">
         <Link
           href="/appointments"
           className="inline-flex items-center gap-1.5 text-sm font-medium mb-6"
@@ -101,12 +107,10 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
           >
             Session Details
           </h1>
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
-            style={{ background: statusStyle.bg, color: statusStyle.color }}
-          >
-            ✓ {statusStyle.label}
-          </span>
+          <SessionStatusPill
+            appointmentId={appointmentId}
+            initialAppointment={appointment}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
@@ -262,7 +266,12 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
                 style={{ background: "var(--md-sys-color-outline-variant)", opacity: 0.35 }}
               />
 
-              <SessionDetailsActions appointment={appointment} role={sessionUser.role} />
+              <SessionDetailsActions
+                appointmentId={appointmentId}
+                role={sessionUser.role}
+                initialAppointment={appointment}
+                initialSessionNote={currentSessionNote}
+              />
               {appointment.reason ? (
                 <>
                   <div
@@ -275,18 +284,20 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
                 >
                   {sessionUser.role === "counselor" ? "Student's Concern" : "Your Submitted Concern"}
                 </h3>
-                <p
-                  className="text-base italic leading-relaxed"
-                  style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-                >
-                  {appointment.reason}
-                </p>
+                <TruncatedText
+                  text={appointment.reason}
+                  lines={4}
+                  italic
+                  className="text-base leading-relaxed"
+                />
                 </>
               ) : null}
             </div>
           </div>
         </div>
-      </div>
-    </main>
+
+        </div>
+      </main>
+    </HydrationBoundary>
   );
 }
