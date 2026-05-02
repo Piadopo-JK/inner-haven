@@ -60,11 +60,29 @@ class BookingService {
       if (appointment?.mode === "online") {
         const counselorToken = await this.repo.getCounselorGoogleToken(appointment.counselor_id);
         if (counselorToken) {
-          meetingLink = await createMeetSpace(counselorToken);
+          try {
+            meetingLink = await createMeetSpace(counselorToken);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            const isReconnectableTokenError =
+              /invalid_grant|invalid refresh token|token has been expired|token has been revoked|failed to obtain google access token/i.test(
+                message,
+              );
+
+            if (isReconnectableTokenError) {
+              throw new Error(
+                "GOOGLE_RECONNECT_REQUIRED:Your Google connection expired. Reconnect Google to approve online appointments with Meet links.",
+              );
+            }
+
+            throw new Error(
+              "GOOGLE_MEET_CREATE_FAILED:Unable to create a Google Meet link right now. Please try again.",
+            );
+          }
           await this.repo.saveMeetLink(id, meetingLink);
         } else {
-          console.warn(
-            `[booking] Counselor ${appointment.counselor_id} has no Google token. Meet link skipped.`,
+          throw new Error(
+            "GOOGLE_RECONNECT_REQUIRED:Connect Google to approve online appointments with Meet links.",
           );
         }
       }
@@ -85,6 +103,10 @@ class BookingService {
     return this.repo.markNotificationRead(notificationId);
   }
 
+  markAllNotificationsRead(role: SessionRole, userId?: string) {
+    return this.repo.markAllNotificationsRead(role, userId);
+  }
+
   countUnreadNotifications(role: SessionRole, userId?: string) {
     return this.repo.countUnreadNotifications(role, userId);
   }
@@ -97,6 +119,10 @@ class BookingService {
     return this.repo.resolveCounselorId(id);
   }
 
+  resolveStudentId(id: string) {
+    return this.repo.resolveStudentId(id);
+  }
+
   getCounselorSchedule(counselorId: string) {
     return this.repo.getCounselorSchedule(counselorId);
   }
@@ -104,10 +130,29 @@ class BookingService {
   upsertCounselorSchedule(counselorId: string, rules: CounselorScheduleRuleInputDTO[]) {
     return this.repo.upsertCounselorSchedule(counselorId, rules);
   }
+
+  getSessionNote(appointmentId: string) {
+    return this.repo.getSessionNote(appointmentId);
+  }
+
+  listSessionNotesByAppointmentIds(ids: string[]) {
+    return this.repo.listSessionNotesByAppointmentIds(ids);
+  }
+
+  upsertSessionNote(
+    appointmentId: string,
+    input: {
+      note_content: string;
+      recommendations: string[];
+      follow_up: string;
+    },
+    counselorId: string,
+  ) {
+    return this.repo.upsertSessionNote(appointmentId, input, counselorId);
+  }
 }
 
 function createBookingRepository(): BookingRepository {
-  console.info("[booking] Using SupabaseBookingRepository");
   return new SupabaseBookingRepository();
 }
 

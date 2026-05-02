@@ -10,6 +10,8 @@ const statusColors: Record<AppointmentDTO["status"], string> = {
     "bg-[var(--md-sys-color-error-container)] text-[var(--md-sys-color-on-error-container)]",
   completed:
     "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]",
+  expired:
+    "bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]",
 };
 
 function formatDisplayTime(rawTime: string) {

@@ -1,7 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTag } from "next/cache";
 
+import { AppointmentDTO } from "@/lib/booking/contracts";
+import { appointmentTag, appointmentsListTag } from "@/lib/cache/appointments-cache";
 import { bookingService } from "@/lib/booking/service";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 
@@ -16,17 +18,14 @@ export async function updateAppointmentStatusAction(
     throw new Error("Unauthorized");
   }
 
-  const ownAppointments = await bookingService.listAppointments({
-    role: "counselor",
-    counselor_id: sessionUser.userId,
-  });
-  const owns = ownAppointments.some((a) => a.appointment_id === appointmentId);
-  if (!owns) {
+  const appointment = await bookingService.getAppointmentById(appointmentId);
+  if (!appointment) {
     throw new Error("Forbidden");
   }
 
   await bookingService.updateAppointmentStatus(appointmentId, status);
-  revalidatePath("/dashboard");
+  revalidateTag(appointmentsListTag("counselor", sessionUser.userId), "max");
+  revalidateTag(appointmentTag(appointmentId), "max");
 }
 
 //student cancels own pending or approved appointment.
@@ -36,12 +35,7 @@ export async function cancelStudentAppointmentAction(appointmentId: string): Pro
     throw new Error("Unauthorized");
   }
 
-  const ownAppointments = await bookingService.listAppointments({
-    role: "student",
-    student_id: sessionUser.userId,
-  });
-
-  const target = ownAppointments.find((a) => a.appointment_id === appointmentId);
+  const target = await bookingService.getAppointmentById(appointmentId);
   if (!target) {
     throw new Error("Forbidden");
   }
@@ -51,8 +45,8 @@ export async function cancelStudentAppointmentAction(appointmentId: string): Pro
   }
 
   await bookingService.updateAppointmentStatus(appointmentId, "cancelled");
-  revalidatePath("/appointments");
-  revalidatePath("/dashboard");
+  revalidateTag(appointmentsListTag("student", sessionUser.userId), "max");
+  revalidateTag(appointmentTag(appointmentId), "max");
 }
 
 //counselor marks a past approved appointment as completed.
@@ -62,11 +56,7 @@ export async function completeAppointmentAction(appointmentId: string): Promise<
     throw new Error("Unauthorized");
   }
 
-  const ownAppointments = await bookingService.listAppointments({
-    role: "counselor",
-    counselor_id: sessionUser.userId,
-  });
-  const targetAppointment = ownAppointments.find((a) => a.appointment_id === appointmentId);
+  const targetAppointment = await bookingService.getAppointmentById(appointmentId);
   if (!targetAppointment) {
     throw new Error("Forbidden");
   }
@@ -77,9 +67,8 @@ export async function completeAppointmentAction(appointmentId: string): Promise<
   const isCompleted = targetAppointment.status === "completed";
 
   if (isCompleted) {
-    revalidatePath("/dashboard");
-    revalidatePath("/appointments");
-    revalidatePath(`/appointments/${appointmentId}`);
+    revalidateTag(appointmentsListTag("counselor", sessionUser.userId), "max");
+    revalidateTag(appointmentTag(appointmentId), "max");
     return;
   }
 
@@ -88,9 +77,8 @@ export async function completeAppointmentAction(appointmentId: string): Promise<
   }
 
   await bookingService.updateAppointmentStatus(appointmentId, "completed");
-  revalidatePath("/dashboard");
-  revalidatePath("/appointments");
-  revalidatePath(`/appointments/${appointmentId}`);
+  revalidateTag(appointmentsListTag("counselor", sessionUser.userId), "max");
+  revalidateTag(appointmentTag(appointmentId), "max");
 }
 
 //student updates own pending appointment.
@@ -103,18 +91,13 @@ export async function updateStudentPendingAppointmentAction(
     reason: string;
     mode: "in_person" | "online";
   },
-): Promise<void> {
+): Promise<AppointmentDTO> {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "student") {
     throw new Error("Unauthorized");
   }
 
-  const ownAppointments = await bookingService.listAppointments({
-    role: "student",
-    student_id: sessionUser.userId,
-  });
-
-  const target = ownAppointments.find((a) => a.appointment_id === appointmentId);
+  const target = await bookingService.getAppointmentById(appointmentId);
   if (!target) {
     throw new Error("Forbidden");
   }
@@ -123,7 +106,7 @@ export async function updateStudentPendingAppointmentAction(
     throw new Error("Only pending appointments can be edited");
   }
 
-  await bookingService.updateAppointment(appointmentId, {
+  const updated = await bookingService.updateAppointment(appointmentId, {
     student_id: sessionUser.userId,
     counselor_id: input.counselor_id,
     appointment_date: input.appointment_date,
@@ -132,9 +115,14 @@ export async function updateStudentPendingAppointmentAction(
     mode: input.mode,
   });
 
-  revalidatePath("/dashboard");
-  revalidatePath("/appointments");
-  revalidatePath(`/appointments/${appointmentId}`);
+  if (!updated) {
+    throw new Error("Appointment not found");
+  }
+
+  revalidateTag(appointmentsListTag("student", sessionUser.userId), "max");
+  revalidateTag(appointmentTag(appointmentId), "max");
+
+  return updated;
 }
 
 //counselor reschedules own pending appointment date/time only.
@@ -156,12 +144,7 @@ export async function rescheduleCounselorAppointmentAction(
     throw new Error("Invalid appointment time");
   }
 
-  const ownAppointments = await bookingService.listAppointments({
-    role: "counselor",
-    counselor_id: sessionUser.userId,
-  });
-
-  const target = ownAppointments.find((a) => a.appointment_id === appointmentId);
+  const target = await bookingService.getAppointmentById(appointmentId);
   if (!target) {
     throw new Error("Forbidden");
   }
@@ -172,7 +155,6 @@ export async function rescheduleCounselorAppointmentAction(
 
   await bookingService.rescheduleAppointment(appointmentId, appointmentDate, appointmentTime);
 
-  revalidatePath("/dashboard");
-  revalidatePath("/appointments");
-  revalidatePath(`/appointments/${appointmentId}`);
+  revalidateTag(appointmentsListTag("counselor", sessionUser.userId), "max");
+  revalidateTag(appointmentTag(appointmentId), "max");
 }

@@ -9,6 +9,7 @@ import {
   CounselorDirectoryItemDTO,
   StudentDirectoryItemDTO,
   NotificationDTO,
+  SessionNoteDTO,
   SessionRole,
 } from "@/lib/booking/contracts";
 
@@ -47,11 +48,24 @@ export interface BookingRepository {
   getCounselorGoogleToken(counselorId: string): Promise<string | null>;
   listNotifications(role: SessionRole, userId?: string): Promise<NotificationDTO[]>;
   markNotificationRead(notificationId: string): Promise<NotificationDTO | null>;
+  markAllNotificationsRead(role: SessionRole, userId?: string): Promise<number>;
   countUnreadNotifications(role: SessionRole, userId?: string): Promise<number>;
+  resolveStudentId(id: string): Promise<string | null>;
   resolveCounselorId(id: string): Promise<string | null>;
   getCounselorSchedule(counselorId: string): Promise<CounselorScheduleRuleDTO[]>;
   upsertCounselorSchedule(
     counselorId: string,
     rules: CounselorScheduleRuleInputDTO[],
   ): Promise<void>;
+  getSessionNote(appointmentId: string): Promise<SessionNoteDTO | null>;
+  listSessionNotesByAppointmentIds(appointmentIds: string[]): Promise<Map<string, SessionNoteDTO>>;
+  upsertSessionNote(
+    appointmentId: string,
+    input: {
+      note_content: string;
+      recommendations: string[];
+      follow_up: string;
+    },
+    counselorId: string,
+  ): Promise<SessionNoteDTO>;
 }

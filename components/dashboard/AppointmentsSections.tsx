@@ -1,8 +1,9 @@
 "use client";
 
-import { MoreVertical } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { MoreVertical } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
@@ -55,12 +56,17 @@ function AppointmentItem({
   getParticipantName?: (appointment: AppointmentDTO) => string | undefined;
   participantNameFallback?: string;
 }) {
+  const router = useRouter();
   const date = new Date(`${appointment.appointment_date}T00:00:00Z`);
   const month = date.toLocaleString("en-US", { month: "short" });
   const day = date.getDate().toString().padStart(2, "0");
   const detailsHref = `/appointments/${appointment.appointment_id}`;
   const participantName = getParticipantName?.(appointment) || participantNameFallback;
   const displayTime = formatDisplayTime(appointment.appointment_time);
+  const isTerminalStatus =
+    appointment.status === "completed" ||
+    appointment.status === "cancelled" ||
+    appointment.status === "expired";
 
   const colorClass =
     appointment.status === "approved"
@@ -69,7 +75,16 @@ function AppointmentItem({
 
   return (
     <div
-      className="w-full min-w-0 max-w-full rounded-3xl p-5 flex items-center gap-6 overflow-hidden break-words"
+      className="w-full min-w-0 max-w-full rounded-3xl p-5 flex items-center gap-4 md:gap-6 overflow-hidden break-words cursor-pointer"
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(detailsHref)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          router.push(detailsHref);
+        }
+      }}
       style={{
         background: "var(--md-sys-color-surface)",
         border: "1px solid var(--md-sys-color-outline-variant)",
@@ -101,14 +116,26 @@ function AppointmentItem({
       </div>
 
       {renderActions ? (
-        <div className="flex items-center gap-2">{renderActions(appointment)}</div>
-      ) : (
-        <Button asChild variant="ghost" size="icon" className="text-[var(--md-sys-color-on-surface-variant)]">
-          <Link href={detailsHref} aria-label="Open appointment details">
-            <MoreVertical className="w-6 h-6" />
-          </Link>
-        </Button>
-      )}
+        <div
+          className="flex items-center gap-2 self-center shrink-0"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {renderActions(appointment)}
+        </div>
+      ) : !isTerminalStatus ? (
+        <div
+          className="flex items-center gap-2 self-center shrink-0"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <Button asChild variant="ghost" size="icon" className="text-[var(--md-sys-color-on-surface-variant)]">
+            <Link href={detailsHref} aria-label="Open appointment details">
+              <MoreVertical className="w-6 h-6" />
+            </Link>
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

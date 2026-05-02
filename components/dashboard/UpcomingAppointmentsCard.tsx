@@ -5,25 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import AppointmentsSections from "@/components/dashboard/AppointmentsSections";
 import { AppointmentDTO } from "@/lib/booking/contracts";
+import { selectStudentDashboardAppointments } from "@/lib/query/appointment-selectors";
 
 export default function UpcomingAppointmentsCard({ appointments }: { appointments: AppointmentDTO[] }) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const approvedUpcoming = appointments
-    .filter((appointment) => {
-      const appointmentDate = new Date(`${appointment.appointment_date}T00:00:00`);
-      return appointment.status === 'approved' && appointmentDate >= today;
-    })
-    .sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime());
-
-  const pendingUpcoming = appointments
-    .filter((appointment) => {
-      const appointmentDate = new Date(`${appointment.appointment_date}T00:00:00`);
-      return appointment.status === 'pending' && appointmentDate >= today;
-    })
-    .sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime())
-    .slice(0, 3);
+  const todayIso = new Date().toISOString().split("T")[0];
+  const { approvedUpcoming, pendingUpcoming } = selectStudentDashboardAppointments(todayIso)(appointments);
 
   return (
     <Card className="border-0 shadow-none bg-transparent p-0">

@@ -1,5 +1,5 @@
 export type SessionMode = "in_person" | "online";
-export type AppointmentStatus = "pending" | "approved" | "cancelled" | "completed";
+export type AppointmentStatus = "pending" | "approved" | "cancelled" | "completed" | "expired";
 export type SessionRole = "student" | "counselor";
 
 export type NotificationType =
@@ -50,6 +50,17 @@ export type AppointmentDTO = {
   created_at: string;
   updated_at: string;
   meeting_link?: string;
+};
+
+export type SessionNoteDTO = {
+  note_id: string;
+  appointment_id: string;
+  note_content: string;
+  recommendations: string[];
+  follow_up: string;
+  created_at: string;
+  updated_at?: string;
+  counselor_id?: string | null;
 };
 
 export type AvailabilitySlotDTO = {
@@ -112,7 +123,8 @@ export type NotificationDTO = {
   recipient_id: string;
   recipient_role: SessionRole;
   type: NotificationType;
-  appointment_id: string;
+  appointment_id: string | null;
+  anonymous_thread_id: string | null;
   message: string;
   created_at: string;
   read: boolean;
