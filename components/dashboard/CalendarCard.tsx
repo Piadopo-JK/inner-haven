@@ -54,7 +54,7 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
         classNames={{
           month_grid: "w-full border-collapse",
           weekday: "text-[var(--md-sys-color-on-surface-variant)] font-bold text-xs uppercase tracking-widest h-10",
-          day_button: "h-10 w-10 rounded-full transition-all hover:bg-[var(--md-sys-color-surface-container)] font-medium",
+          day_button: "h-10 w-10 rounded-full transition-all font-medium",
           selected: "bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)] hover:text-[var(--md-sys-color-on-primary)]",
           today: "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] font-bold",
         }}

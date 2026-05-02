@@ -1,4 +1,5 @@
 import {
+  CircleHelp,
   CalendarDays,
   LayoutDashboard,
   LogOut,
@@ -7,12 +8,14 @@ import {
   Users,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import type { SessionRole } from "@/lib/supabase/get-session-user";
 
 export type NavItem = {
   id: string;
   label: string;
   href: string;
   icon: ComponentType<{ className?: string }>;
+  roles?: SessionRole[];
 };
 
 export const primaryNavItems: NavItem[] = [
@@ -39,6 +42,14 @@ export const primaryNavItems: NavItem[] = [
     label: "Messaging",
     href: "/messaging",
     icon: MessageSquare,
+    roles: ["student"],
+  },
+  {
+    id: "anonymous-queue",
+    label: "Anonymous Queue",
+    href: "/anonymous-requests",
+    icon: CircleHelp,
+    roles: ["counselor"],
   },
 ];
 
