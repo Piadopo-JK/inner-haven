@@ -1,20 +1,27 @@
-export default function MessagingPage() {
-  return (
-    <main className="mx-auto grid w-full max-w-7xl gap-4 p-4">
-      <section
-        className="rounded-2xl border p-8"
-        style={{
-          background: "var(--md-sys-color-surface)",
-          borderColor: "var(--md-sys-color-outline-variant)",
-        }}
-      >
-        <h1 className="text-xl font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-          Messaging
-        </h1>
-        <p className="mt-2 text-sm" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-          Messaging is coming soon. You can continue using appointments and notifications in the meantime.
-        </p>
-      </section>
-    </main>
-  );
+import { redirect } from "next/navigation";
+
+import AnonymousMessagingHub from "@/components/anonymous/AnonymousMessagingHub";
+import { getSessionUser } from "@/lib/supabase/get-session-user";
+
+export const dynamic = "force-dynamic";
+
+export default async function MessagingPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>;
+}) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    redirect("/auth/login");
+  }
+
+  if (sessionUser.role === "counselor") {
+    redirect("/anonymous-requests");
+  }
+
+  const params = await searchParams;
+  const counselorId = typeof params.counselorId === "string" ? params.counselorId : undefined;
+  const threadId = typeof params.threadId === "string" ? params.threadId : undefined;
+
+  return <AnonymousMessagingHub counselorId={counselorId} threadId={threadId} />;
 }
