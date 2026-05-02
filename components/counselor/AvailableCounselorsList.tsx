@@ -13,11 +13,13 @@ const PRESENCE_TOPIC = "presence:counselors";
 type AvailableCounselorsListProps = {
   counselors: CounselorDirectoryItemDTO[];
   canBook?: boolean;
+  canMessage?: boolean;
 };
 
 export default function AvailableCounselorsList({
   counselors,
   canBook = true,
+  canMessage = false,
 }: AvailableCounselorsListProps) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [onlineCounselorIds, setOnlineCounselorIds] = React.useState<Set<string>>(new Set());
@@ -136,6 +138,7 @@ export default function AvailableCounselorsList({
             key={counselor.counselor_id}
             counselor={counselor}
             canBook={canBook}
+            canMessage={canMessage}
             colorIndex={i}
             isOnline={onlineCounselorIds.has(counselor.counselor_id)}
           />

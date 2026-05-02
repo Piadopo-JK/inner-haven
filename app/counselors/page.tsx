@@ -36,7 +36,7 @@ export default async function CounselorsPage() {
           </p>
         </section>
 
-        <AvailableCounselorsList counselors={counselors} canBook={canBook} />
+        <AvailableCounselorsList counselors={counselors} canBook={canBook} canMessage={canBook} />
       </div>
     </main>
   );
