@@ -1,11 +1,11 @@
 "use client";
 
-interface GoogleConnectBannerProps {
-  isConnected: boolean;
-}
+import { useGoogleIntegrationStatus } from "@/lib/query/hooks/useGoogleToken";
 
-export default function GoogleConnectBanner({ isConnected }: GoogleConnectBannerProps) {
-  if (isConnected) {
+export default function GoogleConnectBanner() {
+  const { data: googleIntegration } = useGoogleIntegrationStatus();
+
+  if (googleIntegration?.isConnected ?? true) {
     return null;
   }
 
