@@ -1,24 +1,28 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-import { NotificationDTO } from "@/lib/booking/contracts";
-import { markNotificationReadAction } from "@/app/actions/notifications";
+import { NotificationDTO, SessionRole } from "@/lib/booking/contracts";
+import { markAllNotificationsReadAction } from "@/app/actions/notifications";
 import NotificationCard from "@/components/notifications/NotificationCard";
 
 interface NotificationsListProps {
   notifications: NotificationDTO[];
+  role?: SessionRole;
+  userId?: string;
 }
 
 export default function NotificationsList({
   notifications,
+  role,
+  userId,
 }: NotificationsListProps) {
-  const router = useRouter();
+  useEffect(() => {
+    if (!role || !userId) return;
+    if (!notifications.some((notification) => !notification.read)) return;
 
-  async function handleMarkRead(notificationId: string) {
-    await markNotificationReadAction(notificationId);
-    router.refresh();
-  }
+    void markAllNotificationsReadAction(role, userId);
+  }, [notifications, role, userId]);
 
   return (
     <div className="space-y-3">
@@ -34,7 +38,6 @@ export default function NotificationsList({
           <NotificationCard
             key={n.notification_id}
             notification={n}
-            onMarkRead={handleMarkRead}
           />
         ))
       )}

@@ -14,7 +14,7 @@ export default async function NotificationsPage() {
   if (sessionUser) {
     role = sessionUser.role;
     userId = sessionUser.userId;
-  } 
+  }
 
   const notifications = role ? await bookingService.listNotifications(role, userId) : [];
 
@@ -26,7 +26,7 @@ export default async function NotificationsPage() {
       >
         Notifications
       </h1>
-      <NotificationsList notifications={notifications} />
+      <NotificationsList notifications={notifications} role={role} userId={userId} />
     </main>
   );
 }

@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 
+import { SessionRole } from "@/lib/booking/contracts";
 import { bookingService } from "@/lib/booking/service";
 
-export async function markNotificationReadAction(notificationId: string) {
-  await bookingService.markNotificationRead(notificationId);
-  revalidatePath("/notifications");
-  revalidatePath("/dashboard");
+export async function markAllNotificationsReadAction(role: SessionRole, userId: string) {
+  await bookingService.markAllNotificationsRead(role, userId);
+  revalidatePath("/", "layout");
 }
