@@ -1,13 +1,11 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { MoreVertical } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
-import { cancelStudentAppointmentAction } from "@/app/actions/appointments";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Md3Message } from "@/components/ui/md3-message";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,19 +14,33 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AppointmentsSections from "@/components/dashboard/AppointmentsSections";
 import { AppointmentDTO, CounselorDirectoryItemDTO } from "@/lib/booking/contracts";
+import {
+  useAppointments,
+  useAppointmentsRealtimeSync,
+  useCancelStudentAppointment,
+  type StudentDashboardAppointments,
+  selectStudentDashboardAppointments,
+} from "@/lib/query/hooks/useAppointments";
 
-function AppointmentActions({ appointment }: { appointment: AppointmentDTO }) {
-  const router = useRouter();
+const EMPTY_STUDENT_DASHBOARD_APPOINTMENTS: StudentDashboardAppointments = {
+  approvedUpcoming: [],
+  pendingUpcoming: [],
+};
+
+function AppointmentActions({
+  appointment,
+  onCancel,
+}: {
+  appointment: AppointmentDTO;
+  onCancel: (appointment: AppointmentDTO) => Promise<void>;
+}) {
   const [isBusy, setIsBusy] = useState(false);
-
   const canCancel = appointment.status === "pending" || appointment.status === "approved";
-  const detailsHref = `/appointments/${appointment.appointment_id}`;
 
   async function handleCancel() {
     setIsBusy(true);
     try {
-      await cancelStudentAppointmentAction(appointment.appointment_id);
-      router.refresh();
+      await onCancel(appointment);
     } finally {
       setIsBusy(false);
     }
@@ -47,9 +59,6 @@ function AppointmentActions({ appointment }: { appointment: AppointmentDTO }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="rounded-xl">
-        <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href={detailsHref}>View Details</Link>
-        </DropdownMenuItem>
         {canCancel ? (
           <DropdownMenuItem
             className="cursor-pointer text-[var(--md-sys-color-error)]"
@@ -65,50 +74,57 @@ function AppointmentActions({ appointment }: { appointment: AppointmentDTO }) {
 }
 
 export default function StudentAppointmentsCard({
-  appointments,
   todayIso,
   counselors,
 }: {
-  appointments: AppointmentDTO[];
   todayIso: string;
   counselors: CounselorDirectoryItemDTO[];
 }) {
-  const approvedUpcoming = appointments
-    .filter((a) => a.status === "approved" && a.appointment_date >= todayIso)
-    .sort((a, b) =>
-      `${a.appointment_date}T${a.appointment_time}`.localeCompare(
-        `${b.appointment_date}T${b.appointment_time}`,
-      ),
-    );
+  const role = "student" as const;
+  const selectDashboardAppointments = useMemo(
+    () => selectStudentDashboardAppointments(todayIso),
+    [todayIso],
+  );
 
-  const pendingUpcoming = appointments
-    .filter((a) => a.status === "pending" && a.appointment_date >= todayIso)
-    .sort((a, b) =>
-      `${a.appointment_date}T${a.appointment_time}`.localeCompare(
-        `${b.appointment_date}T${b.appointment_time}`,
-      ),
-    )
-    .slice(0, 3);
+  const { data: dashboardAppointments = EMPTY_STUDENT_DASHBOARD_APPOINTMENTS } = useAppointments(role, undefined, {
+    select: selectDashboardAppointments,
+  });
+  useAppointmentsRealtimeSync(role);
+
+  const { mutateAsync: cancelAppointment } = useCancelStudentAppointment();
+  const [error, setError] = useState("");
 
   function getCounselorName(counselorId: string) {
     return counselors.find((c) => c.counselor_id === counselorId)?.name;
   }
 
+  async function handleOptimisticCancel(appointment: AppointmentDTO) {
+    setError("");
+    try {
+      await cancelAppointment(appointment.appointment_id);
+    } catch {
+      setError("Unable to cancel appointment right now. Please try again.");
+    }
+  }
+
   return (
     <Card className="border-0 shadow-none bg-transparent p-0">
+      {error ? <Md3Message tone="error" className="mb-3">{error}</Md3Message> : null}
       <AppointmentsSections
         sections={[
           {
             title: "Upcoming Appointments",
-            appointments: approvedUpcoming,
+            appointments: dashboardAppointments.approvedUpcoming,
             emptyMessage: "No approved upcoming appointments.",
             getParticipantName: (a) => getCounselorName(a.counselor_id),
             participantNameFallback: "Counselor",
-            renderActions: (a) => <AppointmentActions appointment={a} />,
+            renderActions: (a) => (
+              <AppointmentActions appointment={a} onCancel={handleOptimisticCancel} />
+            ),
           },
           {
             title: "Pending Appointments",
-            appointments: pendingUpcoming,
+            appointments: dashboardAppointments.pendingUpcoming,
             emptyMessage: "No pending appointments.",
             getParticipantName: (a) => getCounselorName(a.counselor_id),
             participantNameFallback: "Counselor",

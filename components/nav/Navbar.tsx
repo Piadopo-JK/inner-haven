@@ -10,12 +10,10 @@ export default async function Navbar() {
 
   if (!sessionUser) return null;
 
-  const [unreadCount, recentNotifications] = await Promise.all([
-    bookingService.countUnreadNotifications(sessionUser.role, sessionUser.userId),
-    bookingService.listNotifications(sessionUser.role, sessionUser.userId),
-  ]);
-
-  const recent = recentNotifications.slice(0, 5);
+  const notifications = await bookingService.listNotifications(
+    sessionUser.role,
+    sessionUser.userId,
+  );
 
   return (
     <>
@@ -36,8 +34,9 @@ export default async function Navbar() {
 
         <div className="flex items-center gap-1 md:gap-2">
           <NotificationBell
-            unreadCount={unreadCount}
-            recentNotifications={recent}
+            role={sessionUser.role}
+            userId={sessionUser.userId}
+            notifications={notifications}
           />
 
           <ProfileMenu />

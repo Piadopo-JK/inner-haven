@@ -1,24 +1,59 @@
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
-
-export const revalidate = 300; //5 minutes
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { cache, Suspense } from "react";
 
 import { bookingService } from "@/lib/booking/service";
+import { getAppointmentsByUserCached } from "@/lib/cache/appointments-cache";
+import { makeQueryClient } from "@/lib/query/client";
+import {
+  appointmentsQueryOptions,
+  googleIntegrationQueryOptions,
+} from "@/lib/query/queries";
+import { loadGoogleIntegrationStatus } from "@/lib/settings/server";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
-import CalendarCard from "@/components/dashboard/CalendarCard";
-import TodayOverviewCard from "@/components/counselor/TodayOverviewCard";
-import GoogleConnectBanner from "@/components/counselor/GoogleConnectBanner";
 import CounselorAppointmentsCard from "@/components/counselor/CounselorAppointmentsCard";
 import CounselorWelcomeHeader from "@/components/counselor/CounselorWelcomeHeader";
-import CounselorStatsRow from "@/components/counselor/CounselorStatsRow";
+import {
+  DashboardAppointmentsPanelSkeleton,
+  DashboardHeroCardSkeleton,
+  DashboardSidebarSkeleton,
+  DashboardStatsRowSkeleton,
+} from "@/components/dashboard/DashboardRouteSkeletons";
+import {
+  CounselorDashboardNextSessionSection,
+  CounselorDashboardSidebarSection,
+  CounselorDashboardStatsSection,
+  StudentDashboardNextSessionSection,
+  StudentDashboardSidebarSection,
+  StudentDashboardStatsSection,
+} from "@/components/dashboard/DashboardQuerySections";
 import StudentWelcomeHeader from "@/components/dashboard/StudentWelcomeHeader";
-import StudentStatsRow from "@/components/dashboard/StudentStatsRow";
-import NextSessionCard from "@/components/dashboard/NextSessionCard";
 import StudentAppointmentsCard from "@/components/dashboard/StudentAppointmentsCard";
-import CounselorListCard from "@/components/dashboard/CounselorListCard";
-import RecentMessagesCard from "@/components/dashboard/RecentMessagesCard";
 import BookingFAB from "@/components/dashboard/BookingFAB";
 
+const getCounselorAppointments = cache(async (counselorId: string) =>
+  getAppointmentsByUserCached("counselor", counselorId),
+);
+
+const getStudentAppointments = cache(async (studentId: string) =>
+  getAppointmentsByUserCached("student", studentId),
+);
+
+const getStudents = cache(async () => bookingService.listStudents());
+
+const getCounselors = cache(async () => bookingService.listCounselors());
+
+const getCounselorUnreadMessages = cache(async (counselorId: string) =>
+  bookingService.countUnreadNotifications("counselor", counselorId),
+);
+
+const getStudentUnreadMessages = cache(async (studentId: string) =>
+  bookingService.countUnreadNotifications("student", studentId),
+);
+
+const getCounselorGoogleIntegration = cache(async (counselorId: string) =>
+  loadGoogleIntegrationStatus(counselorId),
+);
 
 export default async function DashboardPage() {
   const sessionUser = await getSessionUser();
@@ -48,65 +83,26 @@ async function CounselorView({
   counselorName: string;
   todayIso: string;
 }) {
-  const [allItems, counselorGoogleToken, unreadMessages, students] = await Promise.all([
-    bookingService.listAppointments({ role: "counselor", counselor_id: counselorId }),
-    bookingService.getCounselorGoogleToken(counselorId),
-    bookingService.countUnreadNotifications("counselor", counselorId),
-    bookingService.listStudents(),
-  ]);
-
-  const isGoogleConnected = !!counselorGoogleToken;
-
-  const pendingItems = allItems.filter((item) => item.status === "pending");
-  const todayItems = allItems.filter((item) => item.appointment_date === todayIso);
-  const todayPending = todayItems.filter((item) => item.status === "pending").length;
-  const todayScheduled = todayItems.filter((item) => item.status === "approved").length;
-  const completedCount = allItems.filter((item) => item.status === "completed").length;
-  const upcomingApprovedCount = allItems.filter(
-    (item) => item.status === "approved" && item.appointment_date >= todayIso,
-  ).length;
-  const nextSession = allItems
-    .filter((item) => item.status === "approved" && item.appointment_date >= todayIso)
-    .sort((a, b) => {
-      const aTime = `${a.appointment_date}T${a.appointment_time}`;
-      const bTime = `${b.appointment_date}T${b.appointment_time}`;
-      return aTime.localeCompare(bTime);
-    })[0];
-
-  const studentForNextSession = nextSession
-    ? students.find((student) => student.student_id === nextSession.student_id)
-    : undefined;
-
   return (
     <main className="mx-auto w-full max-w-7xl flex flex-col gap-4 p-3 md:p-4">
       <CounselorWelcomeHeader name={counselorName} />
 
-      <CounselorStatsRow
-        pending={pendingItems.length}
-        upcomingApproved={upcomingApprovedCount}
-        completed={completedCount}
-        messages={unreadMessages}
-      />
+      <Suspense fallback={<DashboardStatsRowSkeleton />}>
+        <CounselorStatsSection counselorId={counselorId} todayIso={todayIso} />
+      </Suspense>
 
-      <NextSessionCard
-        appointment={nextSession}
-        participantName={studentForNextSession?.name || "Student"}
-        participantAvatar={studentForNextSession?.avatar_url}
-        todayIso={todayIso}
-      />
+      <Suspense fallback={<DashboardHeroCardSkeleton />}>
+        <CounselorNextSessionSection counselorId={counselorId} todayIso={todayIso} />
+      </Suspense>
 
       <section className="grid gap-6 md:grid-cols-[1fr_350px]">
-        <div className="flex flex-col gap-6">
-          <CounselorAppointmentsCard appointments={allItems} todayIso={todayIso} students={students} />
-        </div>
+        <Suspense fallback={<DashboardAppointmentsPanelSkeleton />}>
+          <CounselorAppointmentsPanel counselorId={counselorId} todayIso={todayIso} />
+        </Suspense>
 
-        <div className="flex flex-col gap-6">
-          <GoogleConnectBanner isConnected={isGoogleConnected} />
-          <Suspense fallback={null}>
-            <CalendarCard appointments={allItems} />
-          </Suspense>
-          <TodayOverviewCard pending={todayPending} scheduled={todayScheduled} />
-        </div>
+        <Suspense fallback={<DashboardSidebarSkeleton showBanner />}>
+          <CounselorSidebarSection counselorId={counselorId} todayIso={todayIso} />
+        </Suspense>
       </section>
     </main>
   );
@@ -123,69 +119,235 @@ async function StudentView({
   userName: string;
   todayIso: string;
 }) {
-  const [counselors, appointments, unreadMessages] = await Promise.all([
-    bookingService.listCounselors(),
-    bookingService.listAppointments({ role: "student", student_id: studentId }),
-    bookingService.countUnreadNotifications("student", studentId),
-  ]);
-
-  const upcomingCount = appointments.filter((appointment) => {
-    return appointment.appointment_date >= todayIso
-      && (appointment.status === "approved" || appointment.status === "pending");
-  }).length;
-  const completedCount = appointments.filter(a => a.status === 'completed').length;
-  
-  // find the next session
-  const nextSession = appointments
-    .filter((appointment) => appointment.status === "approved" && appointment.appointment_date >= todayIso)
-    .sort((a, b) => {
-      const aTime = `${a.appointment_date}T${a.appointment_time}`;
-      const bTime = `${b.appointment_date}T${b.appointment_time}`;
-      return aTime.localeCompare(bTime);
-    })[0];
-
-  const counselorForNextSession = nextSession 
-    ? counselors.find(c => c.counselor_id === nextSession.counselor_id)
-    : undefined;
-
   return (
-    <main className="mx-auto w-full max-w-7xl flex flex-col gap-6 p-4">
+    <main className="mx-auto w-full max-w-7xl flex flex-col gap-4 p-3 md:p-4">
       <StudentWelcomeHeader name={userName} />
 
-      <StudentStatsRow 
-        upcoming={upcomingCount} 
-        messages={unreadMessages}
-        counselors={0}
-        counselorIds={counselors.map((c) => c.counselor_id)}
-        completed={completedCount} 
-      />
+      <Suspense fallback={<DashboardStatsRowSkeleton compact />}>
+        <StudentStatsSection studentId={studentId} todayIso={todayIso} />
+      </Suspense>
 
-      <NextSessionCard 
-        appointment={nextSession} 
-        participantName={counselorForNextSession?.name || "Counselor"}
-        participantAvatar={counselorForNextSession?.avatar_url}
-        todayIso={todayIso}
-        showParticipantOnlineStatus
-      />
+      <Suspense fallback={<DashboardHeroCardSkeleton />}>
+        <StudentNextSessionSection studentId={studentId} todayIso={todayIso} />
+      </Suspense>
 
-      <section className="grid gap-4 md:grid-cols-[1fr_350px]">
-        <div className="flex flex-col gap-4">
-          <StudentAppointmentsCard
-            appointments={appointments}
-            todayIso={todayIso}
-            counselors={counselors}
-          />
-        </div>
+      <section className="grid gap-6 md:grid-cols-[1fr_350px]">
+        <Suspense fallback={<DashboardAppointmentsPanelSkeleton />}>
+          <StudentAppointmentsPanel studentId={studentId} todayIso={todayIso} />
+        </Suspense>
 
-        <div className="flex flex-col gap-4">
-          <Suspense fallback={null}>
-            <CalendarCard appointments={appointments} />
-          </Suspense>
-          <CounselorListCard counselors={counselors} />
-          <RecentMessagesCard />
-        </div>
+        <Suspense fallback={<DashboardSidebarSkeleton showList />}>
+          <StudentSidebarSection studentId={studentId} />
+        </Suspense>
       </section>
       <BookingFAB />
     </main>
+  );
+}
+
+async function CounselorStatsSection({
+  counselorId,
+  todayIso,
+}: {
+  counselorId: string;
+  todayIso: string;
+}) {
+  const [appointments, unreadMessages] = await Promise.all([
+    getCounselorAppointments(counselorId),
+    getCounselorUnreadMessages(counselorId),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("counselor").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <CounselorDashboardStatsSection
+        todayIso={todayIso}
+        unreadMessages={unreadMessages}
+      />
+    </HydrationBoundary>
+  );
+}
+
+async function CounselorNextSessionSection({
+  counselorId,
+  todayIso,
+}: {
+  counselorId: string;
+  todayIso: string;
+}) {
+  const [appointments, students] = await Promise.all([
+    getCounselorAppointments(counselorId),
+    getStudents(),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("counselor").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <CounselorDashboardNextSessionSection
+        todayIso={todayIso}
+        students={students}
+      />
+    </HydrationBoundary>
+  );
+}
+
+async function CounselorAppointmentsPanel({
+  counselorId,
+  todayIso,
+}: {
+  counselorId: string;
+  todayIso: string;
+}) {
+  const [appointments, students] = await Promise.all([
+    getCounselorAppointments(counselorId),
+    getStudents(),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("counselor").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <div className="flex flex-col gap-6">
+        <CounselorAppointmentsCard todayIso={todayIso} students={students} />
+      </div>
+    </HydrationBoundary>
+  );
+}
+
+async function CounselorSidebarSection({
+  counselorId,
+  todayIso,
+}: {
+  counselorId: string;
+  todayIso: string;
+}) {
+  const [appointments, googleIntegration] = await Promise.all([
+    getCounselorAppointments(counselorId),
+    getCounselorGoogleIntegration(counselorId),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("counselor").queryKey,
+    appointments,
+  );
+  queryClient.setQueryData(
+    googleIntegrationQueryOptions().queryKey,
+    googleIntegration,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <CounselorDashboardSidebarSection todayIso={todayIso} />
+    </HydrationBoundary>
+  );
+}
+
+async function StudentStatsSection({
+  studentId,
+  todayIso,
+}: {
+  studentId: string;
+  todayIso: string;
+}) {
+  const [appointments, unreadMessages] = await Promise.all([
+    getStudentAppointments(studentId),
+    getStudentUnreadMessages(studentId),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("student").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <StudentDashboardStatsSection
+        userId={studentId}
+        todayIso={todayIso}
+        unreadMessages={unreadMessages}
+      />
+    </HydrationBoundary>
+  );
+}
+
+async function StudentNextSessionSection({
+  studentId,
+  todayIso,
+}: {
+  studentId: string;
+  todayIso: string;
+}) {
+  const [appointments, counselors] = await Promise.all([
+    getStudentAppointments(studentId),
+    getCounselors(),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("student").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <StudentDashboardNextSessionSection
+        todayIso={todayIso}
+        counselors={counselors}
+      />
+    </HydrationBoundary>
+  );
+}
+
+async function StudentAppointmentsPanel({
+  studentId,
+  todayIso,
+}: {
+  studentId: string;
+  todayIso: string;
+}) {
+  const [appointments, counselors] = await Promise.all([
+    getStudentAppointments(studentId),
+    getCounselors(),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("student").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <div className="flex flex-col gap-4">
+        <StudentAppointmentsCard todayIso={todayIso} counselors={counselors} />
+      </div>
+    </HydrationBoundary>
+  );
+}
+
+async function StudentSidebarSection({ studentId }: { studentId: string }) {
+  const [appointments, counselors] = await Promise.all([
+    getStudentAppointments(studentId),
+    getCounselors(),
+  ]);
+  const queryClient = makeQueryClient();
+  queryClient.setQueryData(
+    appointmentsQueryOptions("student").queryKey,
+    appointments,
+  );
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <StudentDashboardSidebarSection counselors={counselors} />
+    </HydrationBoundary>
   );
 }

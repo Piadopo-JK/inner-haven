@@ -5,6 +5,7 @@ import {
   CounselorScheduleRuleInputDTO,
 } from "@/lib/booking/contracts";
 import { bookingService } from "@/lib/booking/service";
+import { loadCounselorScheduleForUser } from "@/lib/settings/server";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 
 function isValidTime(value: string) {
@@ -81,12 +82,7 @@ export async function GET() {
       return NextResponse.json({ error: "Only counselors can manage schedules" }, { status: 403 });
     }
 
-    const counselorId = await bookingService.resolveCounselorId(sessionUser.userId);
-    if (!counselorId) {
-      return NextResponse.json({ error: "Counselor not found" }, { status: 404 });
-    }
-
-    const rules = await bookingService.getCounselorSchedule(counselorId);
+    const rules = await loadCounselorScheduleForUser(sessionUser.userId);
     return NextResponse.json(rules);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load schedule";

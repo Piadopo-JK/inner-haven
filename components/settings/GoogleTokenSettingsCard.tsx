@@ -1,35 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Md3Message } from "@/components/ui/md3-message";
 
 import { Button } from "@/components/ui/button";
+import {
+  useGoogleIntegrationStatus,
+  useRevokeGoogleAccess,
+} from "@/lib/query/hooks/useGoogleToken";
 
-interface GoogleTokenSettingsCardProps {
-  isConnected: boolean;
-}
-
-export default function GoogleTokenSettingsCard({ isConnected }: GoogleTokenSettingsCardProps) {
-  const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function GoogleTokenSettingsCard() {
+  const {
+    data: googleIntegration,
+    isLoading,
+    error: loadError,
+  } = useGoogleIntegrationStatus();
+  const {
+    mutateAsync: revokeGoogleAccess,
+    isPending: isSubmitting,
+    error: revokeError,
+    reset: resetRevokeError,
+  } = useRevokeGoogleAccess();
+  const connected = googleIntegration?.isConnected ?? false;
 
   async function handleRevoke() {
-    setIsSubmitting(true);
-    setError(null);
-
     try {
-      const response = await fetch("/api/auth/google/disconnect", { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error("Unable to revoke Google access right now.");
-      }
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke Google access.");
-    } finally {
-      setIsSubmitting(false);
-    }
+      resetRevokeError();
+      await revokeGoogleAccess();
+    } catch {}
   }
+
+  const errorMessage = loadError
+    ? loadError instanceof Error
+      ? loadError.message
+      : "Unable to load Google integration state."
+    : revokeError
+      ? revokeError instanceof Error
+        ? revokeError.message
+        : "Failed to revoke Google access."
+      : null;
 
   return (
     <section className="rounded-xl border p-5" style={{ borderColor: "var(--md-sys-color-outline-variant)" }}>
@@ -38,7 +46,13 @@ export default function GoogleTokenSettingsCard({ isConnected }: GoogleTokenSett
         Manage the Google refresh token used to generate Meet links for approved online sessions.
       </p>
 
-      {isConnected ? (
+      {isLoading ? (
+        <p className="mt-4 text-sm text-muted-foreground">Loading Google integration...</p>
+      ) : errorMessage && !connected ? (
+        <Md3Message tone="error" className="mt-4">
+          {errorMessage}
+        </Md3Message>
+      ) : connected ? (
         <div className="mt-4">
           <p className="text-sm">Google account is currently connected.</p>
           <Button
@@ -50,6 +64,11 @@ export default function GoogleTokenSettingsCard({ isConnected }: GoogleTokenSett
           >
             {isSubmitting ? "Revoking..." : "Revoke Google Access"}
           </Button>
+          {errorMessage ? (
+            <Md3Message tone="error" className="mt-3">
+              {errorMessage}
+            </Md3Message>
+          ) : null}
         </div>
       ) : (
         <div className="mt-4">
@@ -66,12 +85,6 @@ export default function GoogleTokenSettingsCard({ isConnected }: GoogleTokenSett
           </a>
         </div>
       )}
-
-      {error ? (
-        <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
-          {error}
-        </p>
-      ) : null}
     </section>
   );
 }

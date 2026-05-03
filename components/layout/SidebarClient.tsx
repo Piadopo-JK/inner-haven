@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { createClient } from "@/lib/supabase/client";
 import { useSidebar } from "@/lib/context/sidebar-context";
 import {
   logoutNavItem,
@@ -13,6 +12,8 @@ import {
   systemNavItems,
   type NavItem,
 } from "@/lib/config/navigation-config";
+import { useSignOut } from "@/lib/query/hooks/useSignOut";
+import { SessionRole } from "@/lib/supabase/get-session-user";
 
 const ICON_COL = 74;
 const PANEL_W = 280;
@@ -223,6 +224,7 @@ function LogoRow({ expanded }: { expanded: boolean }) {
 
 function LogoutConfirmModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [signingOut, setSigningOut] = useState(false);
+  const signOut = useSignOut();
 
   useEffect(() => {
     if (!open) return;
@@ -233,12 +235,10 @@ function LogoutConfirmModal({ open, onClose }: { open: boolean; onClose: () => v
 
   if (!open) return null;
 
-  const signOut = async () => {
+  const handleSignOut = async () => {
     setSigningOut(true);
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-      window.location.assign("/auth/login");
+      await signOut();
     } finally {
       setSigningOut(false);
     }
@@ -285,7 +285,7 @@ function LogoutConfirmModal({ open, onClose }: { open: boolean; onClose: () => v
             className="rounded-lg px-4 py-2 text-sm font-medium text-white"
             style={{ background: "var(--guidance-logout-text)" }}
             disabled={signingOut}
-            onClick={() => { void signOut(); }}
+            onClick={() => { void handleSignOut(); }}
           >
             {signingOut ? "Signing out…" : "Log out"}
           </button>
@@ -295,18 +295,44 @@ function LogoutConfirmModal({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
-export default function SidebarClient({ isVisible }: { isVisible: boolean }) {
+export default function SidebarClient({
+  isVisible,
+  role,
+}: {
+  isVisible: boolean;
+  role?: SessionRole;
+}) {
   const pathname = usePathname();
   const normalizedPath = useMemo(() => normalizePath(pathname), [pathname]);
   const { isExpanded, setExpanded, isMobileOpen, setMobileOpen } = useSidebar();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
 
+  const visiblePrimaryNavItems = useMemo(
+    () =>
+      primaryNavItems.filter((item) => {
+        if (!item.roles || item.roles.length === 0) return true;
+        if (!role) return false;
+        return item.roles.includes(role);
+      }),
+    [role],
+  );
+
+  const visibleSystemNavItems = useMemo(
+    () =>
+      systemNavItems.filter((item) => {
+        if (!item.roles || item.roles.length === 0) return true;
+        if (!role) return false;
+        return item.roles.includes(role);
+      }),
+    [role],
+  );
+
   const activeItemId = useMemo(() => {
-    const allItems = [...primaryNavItems, ...systemNavItems];
+    const allItems = [...visiblePrimaryNavItems, ...visibleSystemNavItems];
     const activeItem = allItems.find((item) => isItemActive(normalizedPath, item.href));
     return activeItem?.id ?? null;
-  }, [normalizedPath]);
+  }, [normalizedPath, visiblePrimaryNavItems, visibleSystemNavItems]);
 
   const markerItemId = hoveredItemId ?? activeItemId;
 
@@ -347,7 +373,7 @@ export default function SidebarClient({ isVisible }: { isVisible: boolean }) {
             <div>
               <LogoRow expanded={isExpanded} />
               <nav className="mt-6 flex flex-col">
-                {primaryNavItems.map((item) => (
+                {visiblePrimaryNavItems.map((item) => (
                   <NavRow
                     key={item.id}
                     item={item}
@@ -361,7 +387,7 @@ export default function SidebarClient({ isVisible }: { isVisible: boolean }) {
             </div>
 
             <nav className="flex flex-col">
-              {systemNavItems.map((item) => (
+              {visibleSystemNavItems.map((item) => (
                 <NavRow
                   key={item.id}
                   item={item}
@@ -406,7 +432,7 @@ export default function SidebarClient({ isVisible }: { isVisible: boolean }) {
           <div>
             <LogoRow expanded />
             <nav className="mt-6 flex flex-col">
-              {primaryNavItems.map((item) => (
+              {visiblePrimaryNavItems.map((item) => (
                 <NavRow
                   key={item.id}
                   item={item}
@@ -420,7 +446,7 @@ export default function SidebarClient({ isVisible }: { isVisible: boolean }) {
           </div>
 
           <nav className="flex flex-col">
-            {systemNavItems.map((item) => (
+            {visibleSystemNavItems.map((item) => (
               <NavRow
                 key={item.id}
                 item={item}

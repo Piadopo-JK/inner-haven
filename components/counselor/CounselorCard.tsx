@@ -19,6 +19,7 @@ const ACCENT_FOREGROUNDS = [
 type CounselorCardProps = {
   counselor: CounselorDirectoryItemDTO;
   canBook?: boolean;
+  canMessage?: boolean;
   colorIndex?: number;
   isOnline?: boolean;
 };
@@ -35,6 +36,7 @@ function getInitials(name: string) {
 export default function CounselorCard({
   counselor,
   canBook = true,
+  canMessage = false,
   colorIndex = 0,
   isOnline = false,
 }: CounselorCardProps) {
@@ -115,23 +117,18 @@ export default function CounselorCard({
             >
               Book Session
             </Link>
-          ) : (
-            <span
-              className="block w-full cursor-not-allowed rounded-[10px] py-2.5 text-center text-sm font-semibold text-white opacity-50"
-              style={{ background: "var(--md-sys-color-primary)" }}
-            >
-              Book Session
-            </span>
-          )}
+          ) : null}
 
-          <span
-            className="flex cursor-not-allowed items-center justify-center gap-1.5 text-xs opacity-40"
-            title="Coming soon"
-            style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-          >
-            <Mail className="h-3.5 w-3.5" />
-            Send Anonymous Concern
-          </span>
+          {canMessage ? (
+            <Link
+              href={`/messaging?counselorId=${counselor.counselor_id}`}
+              className="flex items-center justify-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+              style={{ color: "var(--md-sys-color-secondary)" }}
+            >
+              <Mail className="h-3.5 w-3.5" />
+              Send Anonymous Message
+            </Link>
+          ) : null}
         </div>
       </div>
     </div>

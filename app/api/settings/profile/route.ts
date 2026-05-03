@@ -2,21 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { avatarBucketName } from "@/lib/profile/avatar-storage";
+import { loadProfileSettings } from "@/lib/settings/server";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 import { createServiceClient } from "@/lib/supabase/server";
-
-type ProfileSettingsResponse = {
-  role: "student" | "counselor";
-  name: string;
-  avatar_url: string | null;
-  about?: string | null;
-  // Counselor-only
-  specialization?: string | null;
-  office_room?: string | null;
-  // Student-only
-  year_level?: string | null;
-  course?: string | null;
-};
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") {
@@ -44,57 +32,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const supabase = createServiceClient();
-
-    if (sessionUser.role === "counselor") {
-      const { data, error } = await supabase
-        .from("counselors")
-        .select("name, avatar_url, about, specialization, office_room")
-        .eq("auth_user_id", sessionUser.userId)
-        .maybeSingle();
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data) {
-        return NextResponse.json({ error: "Counselor profile not found" }, { status: 404 });
-      }
-
-      const payload: ProfileSettingsResponse = {
-        role: "counselor",
-        name: data.name,
-        avatar_url: data.avatar_url,
-        about: data.about,
-        specialization: data.specialization,
-        office_room: data.office_room,
-      };
-
-      return NextResponse.json(payload);
-    }
-
-    const { data, error } = await supabase
-      .from("students")
-      .select("name, avatar_url, year_level, course")
-      .eq("auth_user_id", sessionUser.userId)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: "Student profile not found" }, { status: 404 });
-    }
-
-    const payload: ProfileSettingsResponse = {
-      role: "student",
-      name: data.name,
-      avatar_url: data.avatar_url,
-      year_level: data.year_level,
-      course: data.course,
-    };
-
+    const payload = await loadProfileSettings(sessionUser);
     return NextResponse.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load profile settings";
@@ -178,7 +116,7 @@ export async function POST(request: NextRequest) {
         throw error;
       }
 
-      revalidatePath("/app/dashboard");
+      revalidatePath("/dashboard");
       return NextResponse.json({ ok: true });
     }
 

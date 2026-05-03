@@ -1,11 +1,10 @@
 "use client";
 
 import { MoreVertical } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
-import { updateAppointmentStatusAction } from "@/app/actions/appointments";
 import AppointmentsSections from "@/components/dashboard/AppointmentsSections";
+import { Md3Message } from "@/components/ui/md3-message";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -15,36 +14,54 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AppointmentDTO, StudentDirectoryItemDTO } from "@/lib/booking/contracts";
+import {
+  type CounselorDashboardAppointments,
+  useAppointments,
+  useAppointmentsRealtimeSync,
+  useUpdateCounselorAppointmentStatus,
+  selectCounselorDashboardAppointments,
+} from "@/lib/query/hooks/useAppointments";
+
+const EMPTY_COUNSELOR_DASHBOARD_APPOINTMENTS: CounselorDashboardAppointments = {
+  approvedUpcoming: [],
+  pendingApproval: [],
+  pendingCount: 0,
+  todayPending: 0,
+  todayScheduled: 0,
+  completedCount: 0,
+  upcomingApprovedCount: 0,
+  nextSession: undefined,
+};
 
 function AppointmentActions({
   appointment,
   onAction,
+  isBusy,
 }: {
   appointment: AppointmentDTO;
   onAction: (appointmentId: string, status: "approved" | "cancelled") => Promise<void>;
+  isBusy: boolean;
 }) {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10">
+        <Button variant="ghost" size="icon" className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10" disabled={isBusy}>
           <MoreVertical className="w-5 h-5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="rounded-xl">
-        <DropdownMenuItem asChild className="cursor-pointer">
-          <Link href={`/appointments/${appointment.appointment_id}`}>View Details</Link>
-        </DropdownMenuItem>
         {appointment.status === "pending" ? (
-          <DropdownMenuItem className="cursor-pointer" onSelect={() => void onAction(appointment.appointment_id, "approved")}>
-            Accept
+          <DropdownMenuItem className="cursor-pointer" onSelect={() => void onAction(appointment.appointment_id, "approved")} disabled={isBusy}>
+            {isBusy ? "Updating..." : "Accept"}
           </DropdownMenuItem>
         ) : null}
         {appointment.status === "pending" ? (
           <DropdownMenuItem
             className="cursor-pointer text-[var(--md-sys-color-error)]"
             onSelect={() => void onAction(appointment.appointment_id, "cancelled")}
+            disabled={isBusy}
           >
-            Cancel
+            {isBusy ? "Updating..." : "Cancel"}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
@@ -53,60 +70,102 @@ function AppointmentActions({
 }
 
 export default function CounselorAppointmentsCard({
-  appointments,
   todayIso,
   students,
 }: {
-  appointments: AppointmentDTO[];
   todayIso: string;
   students: StudentDirectoryItemDTO[];
 }) {
-  const router = useRouter();
+  const role = "counselor" as const;
+  const [error, setError] = useState<string>("");
+  const [showReconnectGoogle, setShowReconnectGoogle] = useState(false);
+  const selectDashboardAppointments = useMemo(
+    () => selectCounselorDashboardAppointments(todayIso),
+    [todayIso],
+  );
+  const studentNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        students.map((student) => [student.student_id, student.name]),
+      ),
+    [students],
+  );
+  const {
+    data: dashboardAppointments = EMPTY_COUNSELOR_DASHBOARD_APPOINTMENTS,
+  } = useAppointments(role, undefined, {
+    select: selectDashboardAppointments,
+  });
+  useAppointmentsRealtimeSync(role);
+  const {
+    mutateAsync: updateAppointmentStatus,
+    isPending: isUpdating,
+    variables: pendingVariables,
+  } = useUpdateCounselorAppointmentStatus();
 
   function getStudentName(studentId: string) {
-    return students.find((student) => student.student_id === studentId)?.name;
+    return studentNameById[studentId];
   }
 
   async function handleAction(appointmentId: string, status: "approved" | "cancelled") {
-    await updateAppointmentStatusAction(appointmentId, status);
-    router.refresh();
+    setError("");
+    setShowReconnectGoogle(false);
+    try {
+      await updateAppointmentStatus({ appointmentId, status });
+    } catch (err) {
+      const mutationError = err as Error & { reconnectGoogle?: boolean };
+      setError(mutationError.message ?? "Unable to update appointment right now. Please try again.");
+      setShowReconnectGoogle(Boolean(mutationError.reconnectGoogle));
+    }
   }
-
-  const approvedUpcoming = appointments
-    .filter((appointment) => appointment.status === "approved" && appointment.appointment_date >= todayIso)
-    .sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime());
-
-  // Pending means waiting for approval, regardless of date.
-  const pendingApproval = appointments
-    .filter((appointment) => appointment.status === "pending")
-    .sort((a, b) => {
-      const aTime = new Date(`${a.appointment_date}T${a.appointment_time}`).getTime();
-      const bTime = new Date(`${b.appointment_date}T${b.appointment_time}`).getTime();
-      return aTime - bTime;
-    });
 
   return (
     <Card className="border-0 shadow-none bg-transparent p-0">
+      {error ? (
+        <div className="mb-3 rounded-xl border border-[var(--md-sys-color-error)]/30 bg-[var(--md-sys-color-error-container)]/35 px-3 py-2">
+          <Md3Message tone="error">{error}</Md3Message>
+          {showReconnectGoogle ? (
+            <a
+              href="/api/auth/google/initiate"
+              className="mt-2 inline-flex rounded-full px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80"
+              style={{
+                background: "var(--md-sys-color-primary)",
+                color: "var(--md-sys-color-on-primary)",
+              }}
+            >
+              Reconnect Google
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
       <AppointmentsSections
         sections={[
           {
             title: "Upcoming Appointments",
-            appointments: approvedUpcoming,
+            appointments: dashboardAppointments.approvedUpcoming,
             emptyMessage: "No approved upcoming appointments.",
             getParticipantName: (appointment) => getStudentName(appointment.student_id),
             participantNameFallback: "Student",
             renderActions: (appointment) => (
-              <AppointmentActions appointment={appointment} onAction={handleAction} />
+              <AppointmentActions
+                appointment={appointment}
+                onAction={handleAction}
+                isBusy={isUpdating && pendingVariables?.appointmentId === appointment.appointment_id}
+              />
             ),
           },
           {
             title: "Pending Appointments",
-            appointments: pendingApproval,
+            appointments: dashboardAppointments.pendingApproval,
             emptyMessage: "No pending appointments.",
             getParticipantName: (appointment) => getStudentName(appointment.student_id),
             participantNameFallback: "Student",
             renderActions: (appointment) => (
-              <AppointmentActions appointment={appointment} onAction={handleAction} />
+              <AppointmentActions
+                appointment={appointment}
+                onAction={handleAction}
+                isBusy={isUpdating && pendingVariables?.appointmentId === appointment.appointment_id}
+              />
             ),
           },
         ]}

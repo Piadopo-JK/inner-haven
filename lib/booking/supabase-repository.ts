@@ -11,6 +11,7 @@ import {
   CounselorScheduleRuleInputDTO,
   StudentDirectoryItemDTO,
   NotificationDTO,
+  SessionNoteDTO,
   SessionRole,
 } from "@/lib/booking/contracts";
 import { BookingRepository } from "@/lib/booking/repository";
@@ -128,6 +129,7 @@ type AppointmentRow = {
   status: string;
   created_at: string;
   updated_at: string | null;
+  meeting_link?: string | null;
 };
 
 type NotificationRow = {
@@ -135,7 +137,8 @@ type NotificationRow = {
   recipient_id: string;
   recipient_role: SessionRole;
   type: NotificationDTO["type"];
-  appointment_id: string;
+  appointment_id: string | null;
+  anonymous_thread_id?: string | null;
   message: string;
   read: boolean | null;
   created_at?: string | null;
@@ -149,6 +152,17 @@ type ScheduleRuleRow = {
   slot_duration_minutes: number;
   is_active: boolean;
   breaks: unknown;
+};
+
+type SessionNoteRow = {
+  note_id: string;
+  appointment_id: string;
+  note_content: string | null;
+  recommendations: string[] | null;
+  follow_up: string | null;
+  created_at: string;
+  updated_at: string | null;
+  counselor_id: string | null;
 };
 
 function mapCounselorRowToDTO(row: CounselorRow): CounselorDirectoryItemDTO {
@@ -183,6 +197,7 @@ function toReasonPreview(reason: string) {
 
 function mapAppointmentRowToDTO(row: AppointmentRow, meetingLink?: string): AppointmentDTO {
   const reason = row.reason ?? "";
+  const resolvedMeetingLink = meetingLink ?? row.meeting_link ?? undefined;
   return {
     appointment_id: row.appointment_id,
     student_id: row.student_id,
@@ -195,8 +210,12 @@ function mapAppointmentRowToDTO(row: AppointmentRow, meetingLink?: string): Appo
     status: row.status as AppointmentDTO["status"],
     created_at: row.created_at,
     updated_at: row.updated_at ?? row.created_at,
-    meeting_link: meetingLink,
+    meeting_link: resolvedMeetingLink,
   };
+}
+
+function getAppointmentDateTimeMs(row: Pick<AppointmentRow, "appointment_date" | "appointment_time">) {
+  return new Date(`${row.appointment_date}T${normalizeTime(row.appointment_time)}:00`).getTime();
 }
 
 function mapNotificationRowToDTO(row: NotificationRow): NotificationDTO {
@@ -206,6 +225,7 @@ function mapNotificationRowToDTO(row: NotificationRow): NotificationDTO {
     recipient_role: row.recipient_role,
     type: row.type,
     appointment_id: row.appointment_id,
+    anonymous_thread_id: row.anonymous_thread_id ?? null,
     message: row.message,
     created_at: row.created_at ?? row.sent_at ?? new Date().toISOString(),
     read: row.read ?? false,
@@ -220,6 +240,21 @@ function mapScheduleRuleToDTO(row: ScheduleRuleRow): CounselorScheduleRuleDTO {
     slot_duration_minutes: row.slot_duration_minutes ?? 60,
     is_active: row.is_active ?? true,
     breaks: normalizeBreaks(row.breaks),
+  };
+}
+
+function mapSessionNoteRowToDTO(row: SessionNoteRow): SessionNoteDTO {
+  return {
+    note_id: row.note_id,
+    appointment_id: row.appointment_id,
+    note_content: row.note_content ?? "",
+    recommendations: Array.isArray(row.recommendations)
+      ? row.recommendations.map((item) => String(item).trim()).filter(Boolean)
+      : [],
+    follow_up: row.follow_up ?? "",
+    created_at: row.created_at,
+    updated_at: row.updated_at ?? row.created_at,
+    counselor_id: row.counselor_id ?? null,
   };
 }
 
@@ -243,7 +278,7 @@ export class SupabaseBookingRepository implements BookingRepository {
    * resolver to fall back to the raw auth UUID (which would then fail to
    * match stored primary-key references throughout the DB).
    */
-  private async resolveStudentId(id: string) {
+  async resolveStudentId(id: string) {
     const supabase = createServiceClient();
 
     const { data: byPrimaryKey } = await supabase
@@ -709,7 +744,7 @@ export class SupabaseBookingRepository implements BookingRepository {
   }
 
   async createAppointment(input: BookingRequestDTO): Promise<AppointmentDTO> {
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     const [studentId, counselorId] = await Promise.all([
       this.resolveStudentId(input.student_id),
       this.resolveCounselorId(input.counselor_id),
@@ -890,7 +925,58 @@ export class SupabaseBookingRepository implements BookingRepository {
     if (error) throw error;
 
     const rows = (data ?? []) as AppointmentRow[];
-    return rows.map((row) => mapAppointmentRowToDTO(row, (row as any).meeting_link));
+
+    const nowMs = Date.now();
+    const pendingToExpireIds: string[] = [];
+    const approvedToCompleteIds: string[] = [];
+
+    for (const row of rows) {
+      const appointmentMs = getAppointmentDateTimeMs(row);
+      if (Number.isNaN(appointmentMs) || appointmentMs >= nowMs) {
+        continue;
+      }
+
+      if (row.status === "pending") {
+        pendingToExpireIds.push(row.appointment_id);
+      } else if (row.status === "approved") {
+        approvedToCompleteIds.push(row.appointment_id);
+      }
+    }
+
+    if (pendingToExpireIds.length > 0 || approvedToCompleteIds.length > 0) {
+      const admin = createServiceClient();
+      try {
+        if (pendingToExpireIds.length > 0) {
+          await admin
+            .from("appointments")
+            .update({ status: "expired", updated_at: new Date().toISOString() })
+            .in("appointment_id", pendingToExpireIds);
+        }
+        if (approvedToCompleteIds.length > 0) {
+          await admin
+            .from("appointments")
+            .update({ status: "completed", updated_at: new Date().toISOString() })
+            .in("appointment_id", approvedToCompleteIds);
+        }
+      } catch (transitionError) {
+        console.error("Failed to persist automatic appointment status transitions", transitionError);
+      }
+    }
+
+    const normalizedRows = rows.map((row) => {
+      const appointmentMs = getAppointmentDateTimeMs(row);
+      if (!Number.isNaN(appointmentMs) && appointmentMs < nowMs) {
+        if (row.status === "pending") {
+          return { ...row, status: "expired" } as AppointmentRow;
+        }
+        if (row.status === "approved") {
+          return { ...row, status: "completed" } as AppointmentRow;
+        }
+      }
+      return row;
+    });
+
+    return normalizedRows.map((row) => mapAppointmentRowToDTO(row, (row as any).meeting_link));
   }
 
   async getAppointmentById(appointmentId: string): Promise<AppointmentDTO | null> {
@@ -1064,7 +1150,21 @@ export class SupabaseBookingRepository implements BookingRepository {
 
     if (error) throw error;
 
-    return ((data ?? []) as NotificationRow[]).map(mapNotificationRowToDTO);
+    const rows = ((data ?? []) as NotificationRow[]).map(mapNotificationRowToDTO);
+
+    const deduped = new Map<string, NotificationDTO>();
+    for (const notification of rows) {
+      const key =
+        notification.type === "session_notes" && notification.anonymous_thread_id
+          ? `thread:${notification.recipient_role}:${notification.recipient_id}:${notification.anonymous_thread_id}`
+          : `notification:${notification.notification_id}`;
+
+      if (!deduped.has(key)) {
+        deduped.set(key, notification);
+      }
+    }
+
+    return Array.from(deduped.values());
   }
 
   async markNotificationRead(
@@ -1084,7 +1184,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     return mapNotificationRowToDTO(data as NotificationRow);
   }
 
-  async countUnreadNotifications(
+  async markAllNotificationsRead(
     role: SessionRole,
     userId?: string,
   ): Promise<number> {
@@ -1098,16 +1198,182 @@ export class SupabaseBookingRepository implements BookingRepository {
 
     if (!resolvedUserId) return 0;
 
-    const { count, error } = await supabase
+    const { data, error } = await supabase
       .from("notifications")
-      .select("notification_id", { count: "exact", head: true })
+      .update({ read: true })
       .eq("recipient_role", role)
       .eq("recipient_id", resolvedUserId)
-      .eq("read", false);
+      .eq("read", false)
+      .select("notification_id");
+
+    if (error) throw error;
+    return (data ?? []).length;
+  }
+
+  async countUnreadNotifications(
+    role: SessionRole,
+    userId?: string,
+  ): Promise<number> {
+    const notifications = await this.listNotifications(role, userId);
+    return notifications.filter((notification) => !notification.read).length;
+  }
+
+  async getSessionNote(appointmentId: string): Promise<SessionNoteDTO | null> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("session_notes")
+      .select("note_id, appointment_id, note_content, recommendations, follow_up, created_at, updated_at, counselor_id")
+      .eq("appointment_id", appointmentId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return mapSessionNoteRowToDTO(data as SessionNoteRow);
+  }
+
+  async listSessionNotesByAppointmentIds(
+    appointmentIds: string[],
+  ): Promise<Map<string, SessionNoteDTO>> {
+    if (appointmentIds.length === 0) return new Map();
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("session_notes")
+      .select(
+        "note_id, appointment_id, note_content, recommendations, follow_up, created_at, updated_at, counselor_id",
+      )
+      .in("appointment_id", appointmentIds);
 
     if (error) throw error;
 
-    return count ?? 0;
+    const map = new Map<string, SessionNoteDTO>();
+    for (const row of (data ?? []) as SessionNoteRow[]) {
+      map.set(row.appointment_id, mapSessionNoteRowToDTO(row));
+    }
+
+    return map;
+  }
+
+  async upsertSessionNote(
+    appointmentId: string,
+    input: {
+      note_content: string;
+      recommendations: string[];
+      follow_up: string;
+    },
+    counselorId: string,
+  ): Promise<SessionNoteDTO> {
+    const supabase = createServiceClient();
+
+    const { data: existing } = await supabase
+      .from("session_notes")
+      .select("note_id")
+      .eq("appointment_id", appointmentId)
+      .maybeSingle();
+
+    const nowIso = new Date().toISOString();
+    const payload = {
+      appointment_id: appointmentId,
+      note_content: input.note_content.trim(),
+      recommendations: input.recommendations,
+      follow_up: input.follow_up.trim(),
+      counselor_id: counselorId,
+      updated_at: nowIso,
+    };
+
+    const selectCols =
+      "note_id, appointment_id, note_content, recommendations, follow_up, created_at, updated_at, counselor_id";
+
+    let data: SessionNoteRow | null = null;
+
+    const { data: updatedRows, error: updateError } = await supabase
+      .from("session_notes")
+      .update({
+        note_content: payload.note_content,
+        recommendations: payload.recommendations,
+        follow_up: payload.follow_up,
+        counselor_id: payload.counselor_id,
+        updated_at: payload.updated_at,
+      })
+      .eq("appointment_id", appointmentId)
+      .select(selectCols)
+      .limit(1);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (updatedRows && updatedRows.length > 0) {
+      data = updatedRows[0] as SessionNoteRow;
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from("session_notes")
+        .insert(payload)
+        .select(selectCols)
+        .single();
+
+      if (insertError) {
+        const isDuplicate =
+          typeof (insertError as { code?: string }).code === "string" &&
+          (insertError as { code?: string }).code === "23505";
+
+        if (!isDuplicate) {
+          throw insertError;
+        }
+
+        const { data: recoveredRows, error: recoverError } = await supabase
+          .from("session_notes")
+          .update({
+            note_content: payload.note_content,
+            recommendations: payload.recommendations,
+            follow_up: payload.follow_up,
+            counselor_id: payload.counselor_id,
+            updated_at: payload.updated_at,
+          })
+          .eq("appointment_id", appointmentId)
+          .select(selectCols)
+          .limit(1);
+
+        if (recoverError) {
+          throw recoverError;
+        }
+
+        data = (recoveredRows?.[0] as SessionNoteRow | undefined) ?? null;
+      } else {
+        data = inserted as SessionNoteRow;
+      }
+    }
+
+    if (!data) {
+      throw new Error("Unable to upsert session note.");
+    }
+
+    if (!existing?.note_id) {
+      const { data: appointment } = await supabase
+        .from("appointments")
+        .select("student_id")
+        .eq("appointment_id", appointmentId)
+        .maybeSingle();
+
+      if (appointment?.student_id) {
+        const { error: notificationsError } = await supabase.from("notifications").insert({
+          recipient_id: appointment.student_id,
+          recipient_role: "student",
+          type: "session_notes",
+          appointment_id: appointmentId,
+          message: "Your counselor shared session notes for a recent appointment.",
+          sent_at: nowIso,
+          read: false,
+        });
+
+        if (notificationsError) {
+          console.error("Failed to create session note notification", notificationsError);
+        }
+      }
+    }
+
+    return mapSessionNoteRowToDTO(data);
   }
 
 }

@@ -1,88 +1,72 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { AppointmentDTO } from "@/lib/booking/contracts";
 import AppointmentCard from "./AppointmentCard";
 import {
-  getAppointmentsCached,
-  isAppointmentsCacheFresh,
-  subscribeAppointmentsChanged,
-  subscribeAppointmentsRealtimeSync,
-  subscribeVisibilityRefetch,
-  subscribeNetworkRefetch,
-} from "@/lib/cache/settings-client-cache";
+  useAppointments,
+  useAppointmentsRealtimeSync,
+  useCancelCounselorAppointment,
+  useCancelStudentAppointment,
+  useUpdateCounselorAppointmentStatus,
+  type AppointmentTab,
+  selectAppointmentsByTab,
+} from "@/lib/query/hooks/useAppointments";
 
-type Tab = "pending" | "upcoming" | "completed";
+const EMPTY_APPOINTMENT_TABS: Record<AppointmentTab, AppointmentDTO[]> = {
+  pending: [],
+  upcoming: [],
+  completed: [],
+};
 
 interface AppointmentsPageClientProps {
-  initialAppointments: AppointmentDTO[];
   role: "student" | "counselor";
   participantMap: Record<string, { name: string; avatar?: string }>;
 }
 
-export default function AppointmentsPageClient({ 
-  initialAppointments, 
+export default function AppointmentsPageClient({
   role,
-  participantMap 
+  participantMap,
 }: AppointmentsPageClientProps) {
-  const [appointments, setAppointments] = useState<AppointmentDTO[]>(initialAppointments);
-  const [activeTab, setActiveTab] = useState<Tab>("upcoming");
+  const [activeTab, setActiveTab] = useState<AppointmentTab>("upcoming");
   const todayIso = new Date().toISOString().split("T")[0];
+  const selectByTab = useMemo(() => selectAppointmentsByTab(todayIso), [todayIso]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const { data: appointmentsByTab = EMPTY_APPOINTMENT_TABS } = useAppointments(role, undefined, {
+    select: selectByTab,
+  });
+  useAppointmentsRealtimeSync(role);
 
-    const loadAppointments = async (force = false) => {
-      try {
-        const data = await getAppointmentsCached(role, {
-          force,
-          seed: initialAppointments,
-        });
-        if (isMounted) {
-          setAppointments(data);
-        }
-      } catch (err) {
-        console.error("Failed to load appointments", err);
+  const { mutateAsync: cancelStudentAppointment } = useCancelStudentAppointment();
+  const { mutateAsync: cancelCounselorAppointment } = useCancelCounselorAppointment();
+  const { mutateAsync: updateCounselorStatus } = useUpdateCounselorAppointmentStatus();
+
+  async function handleCancelAppointment(appointment: AppointmentDTO) {
+    try {
+      if (role === "student") {
+        await cancelStudentAppointment(appointment.appointment_id);
+      } else {
+        await cancelCounselorAppointment(appointment.appointment_id);
       }
-    };
+    } catch (error) {
+      console.error("Failed to cancel appointment", error);
+    }
+  }
 
-    const unsubscribeChanged = subscribeAppointmentsChanged(role, () => {
-      void loadAppointments();
-    });
-    const unsubscribeRealtime = subscribeAppointmentsRealtimeSync(role);
-    const unsubscribeVisibility = subscribeVisibilityRefetch(
-      () => isAppointmentsCacheFresh(role),
-      () => void loadAppointments(),
-    );
-    const unsubscribeNetwork = subscribeNetworkRefetch(
-      () => isAppointmentsCacheFresh(role),
-      () => void loadAppointments(),
-    );
+  async function handleApproveAppointment(appointment: AppointmentDTO) {
+    if (role !== "counselor") {
+      return;
+    }
 
-    void loadAppointments();
-
-    return () => {
-      isMounted = false;
-      unsubscribeChanged();
-      unsubscribeRealtime();
-      unsubscribeVisibility();
-      unsubscribeNetwork();
-    };
-  }, [initialAppointments, role]);
-
-  const appointmentsByTab = appointments.reduce<Record<Tab, AppointmentDTO[]>>(
-    (acc, appointment) => {
-      if (appointment.status === "pending") {
-        acc.pending.push(appointment);
-      } else if (appointment.status === "approved" && appointment.appointment_date >= todayIso) {
-        acc.upcoming.push(appointment);
-      } else if (appointment.status === "completed") {
-        acc.completed.push(appointment);
-      }
-      return acc;
-    },
-    { pending: [], upcoming: [], completed: [] },
-  );
+    try {
+      await updateCounselorStatus({
+        appointmentId: appointment.appointment_id,
+        status: "approved",
+      });
+    } catch (error) {
+      console.error("Failed to approve appointment", error);
+    }
+  }
 
   const filteredAppointments = appointmentsByTab[activeTab];
   const activeCount = filteredAppointments.length;
@@ -91,9 +75,9 @@ export default function AppointmentsPageClient({
     <div className="flex flex-col gap-10 py-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <h1 className="text-4xl font-bold tracking-tight text-[var(--md-sys-color-on-surface)]">My Appointments</h1>
-        
+
         <div className="flex p-1.5 bg-[var(--md-sys-color-surface-container-high)] rounded-2xl w-full md:w-fit">
-          {(["pending", "upcoming", "completed"] as Tab[]).map((tab) => (
+          {(["pending", "upcoming", "completed"] as AppointmentTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -122,16 +106,18 @@ export default function AppointmentsPageClient({
         <div className="grid gap-6">
           {filteredAppointments.length > 0 ? (
             filteredAppointments.map((appointment) => {
-              const participantId = role === "student" ? appointment.counselor_id : appointment.student_id;
+              const participantId =
+                role === "student" ? appointment.counselor_id : appointment.student_id;
               const participant = participantMap[participantId] || { name: "Unknown" };
-              
               return (
-                <AppointmentCard 
-                  key={appointment.appointment_id} 
-                  appointment={appointment} 
+                <AppointmentCard
+                  key={appointment.appointment_id}
+                  appointment={appointment}
                   role={role}
                   participantName={participant.name}
                   participantAvatar={participant.avatar}
+                  onCancelAppointment={handleCancelAppointment}
+                  onApproveAppointment={handleApproveAppointment}
                 />
               );
             })

@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { NotificationDTO } from "@/lib/booking/contracts";
+import { markAllNotificationsReadAction } from "@/app/actions/notifications";
+import { NotificationDTO, SessionRole } from "@/lib/booking/contracts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,32 +16,112 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { createClient } from "@/lib/supabase/client";
 
 interface NotificationBellProps {
-  unreadCount: number;
-  recentNotifications: NotificationDTO[];
+  role: SessionRole;
+  userId: string;
+  notifications: NotificationDTO[];
 }
 
 export default function NotificationBell({
-  unreadCount,
-  recentNotifications,
+  role,
+  userId,
+  notifications,
 }: NotificationBellProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const notificationsQueryKey = useMemo(
+    () => ["notifications", role, userId] as const,
+    [role, userId],
+  );
+
+  const { data: allNotifications = notifications } = useQuery({
+    queryKey: notificationsQueryKey,
+    queryFn: async () => {
+      const params = new URLSearchParams({ role, user_id: userId });
+      const response = await fetch(`/api/notifications?${params.toString()}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to load notifications.");
+      }
+
+      return (await response.json()) as NotificationDTO[];
+    },
+    initialData: notifications,
+    staleTime: 30_000,
+    refetchOnMount: true,
+  });
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`notifications-${role}-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        (payload) => {
+          const row = ((payload.new ?? payload.old) as {
+            recipient_id?: string;
+            recipient_role?: SessionRole;
+          }) ?? {};
+
+          if (row.recipient_id !== userId || row.recipient_role !== role) {
+            return;
+          }
+
+          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [notificationsQueryKey, queryClient, role, userId]);
+
+  const recentNotifications = allNotifications.slice(0, 5);
+  const liveUnreadCount = allNotifications.reduce(
+    (count, notification) => count + (notification.read ? 0 : 1),
+    0,
+  );
+  const badgeCount = liveUnreadCount;
+
+  async function handleOpenChange(open: boolean) {
+    if (!open || liveUnreadCount === 0) {
+      return;
+    }
+
+    const previous = allNotifications;
+    queryClient.setQueryData<NotificationDTO[]>(
+      notificationsQueryKey,
+      (current) => (current ?? []).map((notification) => ({ ...notification, read: true })),
+    );
+
+    try {
+      await markAllNotificationsReadAction(role, userId);
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+    } catch {
+      queryClient.setQueryData(notificationsQueryKey, previous);
+    }
+  }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false} onOpenChange={(open) => void handleOpenChange(open)}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative shrink-0 overflow-visible">
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
+          {badgeCount > 0 && (
             <Badge
-              className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none"
+              className="absolute -right-1 -top-1 flex h-4 min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] leading-none"
               style={{
                 background: "var(--md-sys-color-error)",
                 color: "var(--md-sys-color-on-error)",
               }}
             >
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {badgeCount > 99 ? "99+" : badgeCount}
             </Badge>
           )}
           <span className="sr-only">Notifications</span>

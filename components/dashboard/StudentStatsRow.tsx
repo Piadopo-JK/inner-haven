@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { NotificationDTO, SessionRole } from "@/lib/booking/contracts";
 
 const PRESENCE_TOPIC = "presence:counselors";
 
@@ -37,6 +39,8 @@ function StatCard({ label, value, sublabel }: StatCardProps) {
 }
 
 export type StudentStatsRowProps = {
+  role: SessionRole;
+  userId: string;
   upcoming: number;
   messages: number;
   counselors: number;
@@ -45,73 +49,109 @@ export type StudentStatsRowProps = {
 };
 
 export default function StudentStatsRow({
+  role,
+  userId,
   upcoming,
   messages,
   counselors,
   completed,
 }: StudentStatsRowProps) {
+  const queryClient = useQueryClient();
+  const notificationsQueryKey = useMemo(
+    () => ["notifications", role, userId] as const,
+    [role, userId],
+  );
   const [onlineCounselors, setOnlineCounselors] = useState(counselors);
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: notificationsQueryKey,
+    queryFn: async () => {
+      const params = new URLSearchParams({ role, user_id: userId });
+      const response = await fetch(`/api/notifications?${params.toString()}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to load notifications.");
+      }
+
+      return (await response.json()) as NotificationDTO[];
+    },
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`student-stats-notifications-${role}-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        (payload) => {
+          const row = ((payload.new ?? payload.old) as {
+            recipient_id?: string;
+            recipient_role?: SessionRole;
+          }) ?? {};
+
+          if (row.recipient_id !== userId || row.recipient_role !== role) {
+            return;
+          }
+
+          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [notificationsQueryKey, queryClient, role, userId]);
+
+  useEffect(() => {
+    setOnlineCounselors(counselors);
+  }, [counselors]);
+
   useEffect(() => {
     const supabase = createClient();
     let disposed = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    async function subscribePresence() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session || disposed) {
-        console.log("[presence:student] skipped subscribe, missing session or disposed");
+    function syncOnlineCounselors() {
+      if (disposed) {
         return;
       }
+      const state = channel?.presenceState() as Record<string, Array<{ counselor_id?: string }>> | undefined;
+      setOnlineCounselors(state ? Object.keys(state).length : 0);
+    }
 
+    function subscribePresence() {
       channel = supabase.channel(PRESENCE_TOPIC);
 
       channel
-        .on("presence", { event: "sync" }, () => {
-          if (disposed) {
-            return;
-          }
-          const state = channel?.presenceState() as Record<string, Array<{ counselor_id?: string }>> | undefined;
-          const nextCount = state ? Object.keys(state).length : 0;
-          console.log("[presence:student] sync", { onlineCounselors: nextCount, state });
-          setOnlineCounselors(nextCount);
-        })
-        .on("presence", { event: "join" }, ({ newPresences }) => {
-          if (disposed) return;
-          const state = channel?.presenceState() as Record<string, unknown> | undefined;
-          const nextCount = state ? Object.keys(state).length : 0;
-          console.log("[presence:student] join", { newPresences, onlineCounselors: nextCount });
-          setOnlineCounselors(nextCount);
-        })
-        .on("presence", { event: "leave" }, ({ leftPresences }) => {
-          if (disposed) return;
-          const state = channel?.presenceState() as Record<string, unknown> | undefined;
-          const nextCount = state ? Object.keys(state).length : 0;
-          console.log("[presence:student] leave", { leftPresences, onlineCounselors: nextCount });
-          setOnlineCounselors(nextCount);
-        })
-        .subscribe((status) => {
-          console.log("[presence:student] channel status", status);
-        });
+        .on("presence", { event: "sync" }, syncOnlineCounselors)
+        .on("presence", { event: "join" }, syncOnlineCounselors)
+        .on("presence", { event: "leave" }, syncOnlineCounselors)
+        .subscribe();
     }
 
-    void subscribePresence();
+    subscribePresence();
 
     return () => {
       disposed = true;
-      console.log("[presence:student] cleanup removeChannel");
       if (channel) {
         void supabase.removeChannel(channel);
       }
     };
   }, []);
 
+  const unreadMessages = notifications.length
+    ? notifications.reduce((count, notification) => count + (notification.read ? 0 : 1), 0)
+    : messages;
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 py-1">
       <StatCard label="Upcoming" value={upcoming} sublabel="Scheduled" />
-      <StatCard label="Messages" value={messages} sublabel="Unread" />
+      <StatCard label="Messages" value={unreadMessages} sublabel="Unread" />
       <StatCard label="Counselors" value={onlineCounselors} sublabel="Online" />
       <StatCard label="Completed" value={completed} sublabel="Milestones" />
     </div>

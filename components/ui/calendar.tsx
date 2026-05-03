@@ -32,7 +32,6 @@ export function Calendar({
         day: "p-0 text-center text-sm align-middle",
         day_button: cn(
           "mx-auto h-9 w-9 rounded-md p-0 font-normal transition-colors",
-          "hover:bg-[var(--md-sys-color-surface-container)]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]",
         ),
         selected:
