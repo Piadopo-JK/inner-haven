@@ -1,93 +1,70 @@
 "use client";
 
 import * as React from "react";
-
-import { DashboardCard } from "@/components/dashboard/DashboardCard";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { AppointmentDTO } from "@/lib/booking/contracts";
-
-function formatDateOnly(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getTodayDate() {
-  return new Date(`${formatDateOnly(new Date())}T00:00:00`);
-}
 
 type CalendarCardProps = {
   appointments?: AppointmentDTO[];
 };
 
 export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
-  const [date, setDate] = React.useState<Date | undefined>(() => getTodayDate());
+  const [date, setDate] = React.useState<Date | undefined>(new Date());
+  const [month, setMonth] = React.useState<Date>(new Date());
 
   const bookedDates = React.useMemo(() => {
-    const unique = new Set(appointments.map((appointment) => appointment.appointment_date));
-    return Array.from(unique).map((value) => new Date(`${value}T00:00:00`));
+    return appointments.map(a => new Date(a.appointment_date));
   }, [appointments]);
 
-  const selectedDayAppointments = React.useMemo(() => {
-    if (!date) return [];
-    const selected = formatDateOnly(date);
-    return appointments.filter((appointment) => appointment.appointment_date === selected);
-  }, [appointments, date]);
-
   return (
-    <DashboardCard title="Calendar">
-      <div className="w-full grid gap-3">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={setDate}
-          modifiers={{ booked: bookedDates }}
-          modifiersClassNames={{
-            booked:
-              "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] rounded-full",
-          }}
-          className="w-full rounded-lg p-2"
-          style={{ border: "1px solid var(--md-sys-color-outline-variant)" }}
-        />
-
-        {date ? (
-          <div className="grid gap-2">
-            <p
-              className="text-xs font-medium"
-              style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-            >
-              Appointments on {formatDateOnly(date)}
-            </p>
-
-            {selectedDayAppointments.length === 0 ? (
-              <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                No appointments for this date.
-              </p>
-            ) : (
-              <div className="grid gap-2">
-                {selectedDayAppointments.map((appointment) => (
-                  <article
-                    key={appointment.appointment_id}
-                    className="rounded-md border p-2"
-                    style={{
-                      borderColor: "var(--md-sys-color-outline-variant)",
-                      background: "var(--md-sys-color-surface-container-low)",
-                    }}
-                  >
-                    <p className="text-sm" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                      {appointment.appointment_time} • {appointment.status}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                      {appointment.reason || "No reason provided"}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
+    <div className="bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)] rounded-3xl p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4 px-2">
+        <h2 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">
+          {month.toLocaleString('default', { month: 'long', year: 'numeric' })}
+        </h2>
+        <div className="flex gap-1">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="w-8 h-8 rounded-full"
+            onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="w-8 h-8 rounded-full"
+            onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
-    </DashboardCard>
+
+      <Calendar
+        mode="single"
+        selected={date}
+        onSelect={setDate}
+        month={month}
+        onMonthChange={setMonth}
+        className="w-full"
+        classNames={{
+          month_grid: "w-full border-collapse",
+          weekday: "text-[var(--md-sys-color-on-surface-variant)] font-bold text-xs uppercase tracking-widest h-10",
+          day_button: "h-10 w-10 rounded-full transition-all font-medium",
+          selected: "bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)] hover:text-[var(--md-sys-color-on-primary)]",
+          today: "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] font-bold",
+        }}
+        modifiers={{
+          booked: bookedDates
+        }}
+        modifiersClassNames={{
+          booked: "after:block after:w-1 after:h-1 after:bg-[var(--md-sys-color-primary)] after:rounded-full after:mx-auto after:mt-1"
+        }}
+      />
+    </div>
   );
 }

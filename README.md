@@ -13,9 +13,26 @@
 | IH.010.003            | 2026-03-13    |
 | IH.010.004            | 2026-03-25    |
 | IH.010.005            | 2026-04-10    |
+| IH.010.006            | 2026-04-28    |
 | ...                   | ...           |
 
 ---
+## [IH.010.006](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+- add booking, availability, counselor schedule, and settings API endpoints with updated server actions  for appointments and profile management
+- refactor booking domain (contracts, service, repository) to support caching, scheduling changes, and improved supabase integration
+- introduce client-side settings cache layer for optimized profile and settings reads
+- update supabase repository logic and add avatar storage helper for profile image management
+- add global application layout shell with sidebar navigation system and shared layout context
+- introduce cache warmer initializer and global cache warming mechanism to improve navigation performance and reduce initial load latency
+- integrate counselor heartbeat system into layout for presence tracking and session awareness
+- refactor navigation architecture with centralized config and sidebar context state management
+- add full appointments frontend module including booking flow, session pages, and appointment detail/edit views
+- add appointment UI components
+- refactor student and counselor dashboards with improved session visibility, stats, and upcoming appointment widgets
+- redesign counselor directory and dashboard cards for availability, summaries, and appointment insights
+
+
 ## [IH.010.005](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
 - enforce session auth, role checks, and identity scoping on all API routes and server actions
