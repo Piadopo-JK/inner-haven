@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+
   /*  MD3 Color Tokens (light scheme) */
 
   /* Primary */
@@ -57,13 +59,20 @@
   --md-sys-elevation-level2: 0 2px 6px rgba(0, 0, 0, 0.16);
   --md-sys-elevation-level3: 0 4px 8px rgba(0, 0, 0, 0.18);
 
-  --guidance-sidebar-bg: #f8fafc;
-  --guidance-sidebar-text: #64748b;
-  --guidance-sidebar-active-bg: #f0fdfa;
-  --guidance-sidebar-active-text: #0d9488;
-  --guidance-sidebar-hover-bg: #f1f5f9;
-  --guidance-sidebar-divider: #e2e8f0;
-  --guidance-logout-text: #b91c1c;
+  --guidance-sidebar-bg: #f5f5f5;
+  --guidance-sidebar-text: #4b5563;
+  --guidance-sidebar-active-bg: #e5e7eb;
+  --guidance-sidebar-active-text: #111827;
+  --guidance-sidebar-hover-bg: #e5e7eb;
+  --guidance-sidebar-divider: #d1d5db;
+  --guidance-logout-text: #374151;
+  --guidance-logo-primary: #4caf50;
+  --guidance-logo-accent: #666666;
+  --guidance-logo-muted: #6b7280;
+  --guidance-logo-subtitle: #6b7280;
+  --guidance-overlay-scrim: color-mix(in srgb, var(--md-sys-color-inverse-surface) 42%, transparent);
+
+  --guidance-next-session-bg: var(--md-sys-color-primary);
 }
 
 @layer base {
@@ -109,35 +118,41 @@
     --radius: 0.5rem;
   }
 
-  /* Dark-scheme MD3 mappings — future work */
   .dark {
+    color-scheme: dark;
+
     --background: 265 8% 10%;
     --foreground: 270 15% 95%;
-    --card: 265 8% 10%;
+    --card: 265 8% 13%;              
     --card-foreground: 270 15% 95%;
-    --popover: 265 8% 10%;
+    --popover: 265 8% 13%;
     --popover-foreground: 270 15% 95%;
-    --primary: 265 100% 81%;
-    --primary-foreground: 265 59% 26%;
+    --primary: 178 58% 56%;          
+    --primary-foreground: 178 100% 11%; 
     --secondary: 264 10% 26%;
     --secondary-foreground: 263 46% 88%;
     --muted: 265 8% 18%;
-    --muted-foreground: 265 12% 65%;
+    --muted-foreground: 265 12% 72%;
     --accent: 265 8% 22%;
     --accent-foreground: 270 15% 95%;
     --destructive: 4 84% 72%;
     --destructive-foreground: 3 100% 13%;
     --border: 265 8% 28%;
     --input: 265 8% 22%;
-    --ring: 265 100% 81%;
+    --ring: 178 58% 56%;             
 
-    --guidance-sidebar-bg: #0f172a;
-    --guidance-sidebar-text: #cbd5e1;
-    --guidance-sidebar-active-bg: #0b2b2a;
-    --guidance-sidebar-active-text: #5eead4;
-    --guidance-sidebar-hover-bg: #1e293b;
-    --guidance-sidebar-divider: #334155;
-    --guidance-logout-text: #f87171;
+    --guidance-sidebar-bg: #0f0f10;
+    --guidance-sidebar-text: #d1d5db;
+    --guidance-sidebar-active-bg: #1f2937;
+    --guidance-sidebar-active-text: #f3f4f6;
+    --guidance-sidebar-hover-bg: #262626;
+    --guidance-sidebar-divider: #374151;
+    --guidance-logout-text: #9ca3af;
+    --guidance-logo-primary: #f3f4f6;
+    --guidance-logo-accent: #d1d5db;
+    --guidance-logo-muted: #9ca3af;
+    --guidance-logo-subtitle: #ffffff;        
+    --guidance-overlay-scrim: color-mix(in srgb, var(--md-sys-color-inverse-surface) 58%, transparent);
   }
 }
 
@@ -146,8 +161,18 @@
     @apply border-border;
   }
   html {
+    color-scheme: light dark;
     overflow-x: hidden;
   }
+
+  html.light {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground;
     min-height: 100dvh;
@@ -180,4 +205,78 @@
   border-color: var(--md-sys-color-outline-variant);
   color: var(--md-sys-color-on-surface);
   box-shadow: var(--md-sys-elevation-level1);
+}
+
+.dark {
+  --md-sys-color-primary: #4dd0ca;
+  --md-sys-color-on-primary: #003735;
+  --md-sys-color-primary-container: #005051;
+  --md-sys-color-on-primary-container: #9cf0eb;
+
+  --md-sys-color-secondary: #cfbcff;
+  --md-sys-color-on-secondary: #381e72;
+  --md-sys-color-secondary-container: #4f378b;
+  --md-sys-color-on-secondary-container: #ecdcff;
+
+  --md-sys-color-tertiary: #efb8c8;
+  --md-sys-color-on-tertiary: #4a2534;
+  --md-sys-color-tertiary-container: #633b48;
+  --md-sys-color-on-tertiary-container: #ffd8e4;
+
+  --md-sys-color-error: #ffb4ab;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000a;
+  --md-sys-color-on-error-container: #ffdad6;
+
+  --md-sys-color-background: #1c1b1f;
+  --md-sys-color-on-background: #e6e1e5;
+  --md-sys-color-surface: #1c1b1f;
+  --md-sys-color-on-surface: #e6e1e5;
+  --md-sys-color-surface-variant: #49454e;
+  --md-sys-color-on-surface-variant: #cac4d0;
+  --md-sys-color-outline: #938f99;
+  --md-sys-color-outline-variant: #49454e;
+
+  --md-sys-color-surface-container-lowest: #100f14;
+  --md-sys-color-surface-container-low: #1c1b1f;
+  --md-sys-color-surface-container: #201f23;
+  --md-sys-color-surface-container-high: #2a2831;
+  --md-sys-color-surface-container-highest: #36343b;
+
+  --md-sys-color-inverse-surface: #e6e1e5;
+  --md-sys-color-inverse-on-surface: #313033;
+  --md-sys-color-inverse-primary: #006967;
+
+  --guidance-sidebar-bg: #0f0f10;
+  --guidance-sidebar-text: #d1d5db;
+  --guidance-sidebar-active-bg: #1f2937;
+  --guidance-sidebar-active-text: #f3f4f6;
+  --guidance-sidebar-hover-bg: #262626;
+  --guidance-sidebar-divider: #374151;
+  --guidance-logout-text: #9ca3af;
+
+  --guidance-next-session-bg: #374151;
+
+  --md-sys-elevation-level1: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --md-sys-elevation-level2: 0 2px 6px rgba(0, 0, 0, 0.42);
+  --md-sys-elevation-level3: 0 4px 8px rgba(0, 0, 0, 0.54);
+}
+
+.surface-band {
+  position: relative;
+  left: 50%;
+}
+
+.anonymous-hub-bg {
+  background:
+    radial-gradient(
+      circle at 10% 10%,
+      color-mix(in srgb, var(--md-sys-color-primary-container) 25%, transparent),
+      transparent 55%
+    ),
+    var(--md-sys-color-surface);
+}
+
+.dark .anonymous-hub-bg {
+  background: var(--md-sys-color-surface);
 }
