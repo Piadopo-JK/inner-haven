@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 export function useSignOut() {
   const queryClient = useQueryClient();
 
-  return async function signOut(redirectTo = "/auth/login") {
+  return async function signOut(redirectTo = "/login") {
     const supabase = createClient();
     const { error } = await supabase.auth.signOut();
 

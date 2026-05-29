@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cancelStudentAppointmentAction } from "@/app/actions/appointments";
 import type { AppointmentDTO } from "@/lib/booking/contracts";
 import { queryKeys } from "@/lib/query/queries";
+import { debouncedInvalidate } from "@/lib/query/debounce-invalidate";
 
 export function useCancelStudentAppointment() {
   const queryClient = useQueryClient();
@@ -73,14 +74,14 @@ export function useCancelStudentAppointment() {
     },
 
     onSettled: (_appointment, _error, appointmentId, context) => {
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointments("student"),
       });
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointmentDetails(appointmentId),
       });
       if (context?.counselorId) {
-        void queryClient.invalidateQueries({
+        debouncedInvalidate(queryClient, {
           queryKey: queryKeys.availabilityByCounselor(context.counselorId),
         });
       }

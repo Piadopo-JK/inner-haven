@@ -1,8 +1,32 @@
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, focusManager } from "@tanstack/react-query";
 
 import { isAuthExpiredError } from "@/lib/query/http";
 
 let authExpiryRedirectInFlight = false;
+
+const FOCUS_DEBOUNCE_MS = 10_000;
+let lastFocusTime = 0;
+
+focusManager.setEventListener((handleFocus) => {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      const now = Date.now();
+      if (now - lastFocusTime >= FOCUS_DEBOUNCE_MS) {
+        lastFocusTime = now;
+        handleFocus();
+      }
+    }
+  };
+
+  document.addEventListener("visibilitychange", onVisibilityChange, false);
+  return () => {
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+  };
+});
 
 async function handleAuthExpired(queryClient: QueryClient, error: unknown) {
   if (
@@ -21,7 +45,7 @@ async function handleAuthExpired(queryClient: QueryClient, error: unknown) {
     const supabase = createClient();
     await supabase.auth.signOut().catch(() => undefined);
   } finally {
-    window.location.assign("/auth/login?reason=session-expired");
+    window.location.assign("/login?reason=session-expired");
   }
 }
 
