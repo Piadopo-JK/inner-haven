@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   if (!sessionUser || sessionUser.role !== "counselor") {
     console.error("[google/callback] No counselor session", { userId: sessionUser?.userId, role: sessionUser?.role });
-    return NextResponse.redirect(`${appUrl}/auth/login`);
+    return NextResponse.redirect(`${appUrl}/login`);
   }
 
   // validate if state matches the session counselor
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // resolve the actual counselor_id from auth_user_id
+  // map auth_user_id to counselor_id for token storage
   const { data: counselorRow, error: lookupError } = await supabase
     .from("counselors")
     .select("counselor_id")

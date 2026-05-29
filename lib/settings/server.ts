@@ -13,7 +13,7 @@ type SessionUserLike = {
 
 export async function loadProfileSettings(
   sessionUser: SessionUserLike,
-): Promise<ProfileSettingsCachePayload> {
+): Promise<ProfileSettingsCachePayload | null> {
   const supabase = createServiceClient();
 
   if (sessionUser.role === "counselor") {
@@ -28,7 +28,7 @@ export async function loadProfileSettings(
     }
 
     if (!data) {
-      throw new Error("Counselor profile not found");
+      return null;
     }
 
     return {
@@ -43,7 +43,7 @@ export async function loadProfileSettings(
 
   const { data, error } = await supabase
     .from("students")
-    .select("name, avatar_url, year_level, course")
+    .select("name, avatar_url")
     .eq("auth_user_id", sessionUser.userId)
     .maybeSingle();
 
@@ -52,15 +52,13 @@ export async function loadProfileSettings(
   }
 
   if (!data) {
-    throw new Error("Student profile not found");
+    return null;
   }
 
   return {
     role: "student",
     name: data.name,
     avatar_url: data.avatar_url,
-    year_level: data.year_level,
-    course: data.course,
   };
 }
 

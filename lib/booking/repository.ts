@@ -52,6 +52,12 @@ export interface BookingRepository {
   countUnreadNotifications(role: SessionRole, userId?: string): Promise<number>;
   resolveStudentId(id: string): Promise<string | null>;
   resolveCounselorId(id: string): Promise<string | null>;
+  ensureStudentProfile(input: {
+    authUserId: string;
+    email?: string;
+    name?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<{ created: boolean; studentId: string | null }>;
   getCounselorSchedule(counselorId: string): Promise<CounselorScheduleRuleDTO[]>;
   upsertCounselorSchedule(
     counselorId: string,

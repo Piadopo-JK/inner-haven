@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { AppointmentDTO } from "@/lib/booking/contracts";
 import { appointmentTag, appointmentsListTag } from "@/lib/cache/appointments-cache";
@@ -23,12 +24,29 @@ export async function updateAppointmentStatusAction(
     throw new Error("Forbidden");
   }
 
-  await bookingService.updateAppointmentStatus(appointmentId, status);
+  try {
+    await bookingService.updateAppointmentStatus(appointmentId, status);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (message.startsWith("GOOGLE_RECONNECT_REQUIRED:")) {
+      redirect("/settings?reconnect=google");
+    }
+
+    if (message.startsWith("GOOGLE_MEET_CREATE_FAILED:")) {
+      throw new Error(
+        "Unable to create a Google Meet link right now. Please try again.",
+      );
+    }
+
+    throw error;
+  }
+
   revalidateTag(appointmentsListTag("counselor", sessionUser.userId), "max");
   revalidateTag(appointmentTag(appointmentId), "max");
 }
 
-//student cancels own pending or approved appointment.
+// student cancels their pending or approved appointment
 export async function cancelStudentAppointmentAction(appointmentId: string): Promise<void> {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "student") {

@@ -33,6 +33,9 @@ export async function GET() {
     }
 
     const payload = await loadProfileSettings(sessionUser);
+    if (!payload) {
+      return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+    }
     return NextResponse.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load profile settings";
@@ -53,8 +56,6 @@ export async function POST(request: NextRequest) {
       about?: unknown;
       specialization?: unknown;
       office_room?: unknown;
-      year_level?: unknown;
-      course?: unknown;
     };
 
     const name = normalizeString(body.name);
@@ -62,8 +63,6 @@ export async function POST(request: NextRequest) {
     const about = normalizeString(body.about);
     const specialization = normalizeString(body.specialization);
     const officeRoom = normalizeString(body.office_room);
-    const yearLevel = normalizeString(body.year_level);
-    const course = normalizeString(body.course);
 
     if (avatarUrl && !isAvatarBucketPublicUrl(avatarUrl)) {
       return NextResponse.json({ error: "Avatar URL must be from the public avatars bucket." }, { status: 400 });
@@ -87,14 +86,6 @@ export async function POST(request: NextRequest) {
 
     if (officeRoom && officeRoom.length > 100) {
       return NextResponse.json({ error: "Office room is too long" }, { status: 400 });
-    }
-
-    if (yearLevel && yearLevel.length > 50) {
-      return NextResponse.json({ error: "Year level is too long" }, { status: 400 });
-    }
-
-    if (course && course.length > 200) {
-      return NextResponse.json({ error: "Course is too long" }, { status: 400 });
     }
 
     const supabase = createServiceClient();
@@ -125,8 +116,6 @@ export async function POST(request: NextRequest) {
       .update({
         name: nextName,
         avatar_url: avatarUrl,
-        year_level: yearLevel,
-        course,
       })
       .eq("auth_user_id", sessionUser.userId);
 
