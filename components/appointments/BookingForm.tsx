@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, User } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -285,9 +286,9 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                       onFocus={() => prefetchCounselorAvailability(c.counselor_id)}
                       className="flex items-center gap-4 p-4 rounded-2xl border border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-low)] transition-all text-left"
                     >
-                      <div className="w-12 h-12 rounded-full shrink-0 overflow-hidden border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)]">
+                      <div className="relative w-12 h-12 rounded-full shrink-0 overflow-hidden border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)]">
                         {c.avatar_url ? (
-                          <img src={c.avatar_url} alt={c.name} className="h-full w-full object-cover" />
+                          <Image src={c.avatar_url} alt={c.name} fill className="object-cover" sizes="48px" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center">
                             <User className="w-5 h-5 text-[var(--md-sys-color-on-surface-variant)] opacity-60" />
@@ -314,10 +315,10 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">Select Date</h3>
                     <div className="flex gap-1">
-                      <Button type="button" variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}>
+                      <Button type="button" variant="ghost" size="icon" aria-label="Previous month" className="w-8 h-8 rounded-full" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}>
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon" className="w-8 h-8 rounded-full" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}>
+                      <Button type="button" variant="ghost" size="icon" aria-label="Next month" className="w-8 h-8 rounded-full" onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}>
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
