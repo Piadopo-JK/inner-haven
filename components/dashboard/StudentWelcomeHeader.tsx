@@ -18,7 +18,7 @@ export default function StudentWelcomeHeader({ name }: { name: string }) {
           Hello, {name}.
         </h1>
         <p className="text-base md:text-lg text-[var(--md-sys-color-on-surface-variant)] font-medium italic">
-          {dateStr} <span className="mx-2">—</span> <span className="opacity-70">Your path to peace today.</span>
+          {dateStr} <span className="mx-2">—</span> <span className="opacity-85">Your path to peace today.</span>
         </p>
       </div>
       <div className="text-right flex flex-col items-end">

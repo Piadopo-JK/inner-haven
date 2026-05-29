@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 
-import TodayOverviewCard from "@/components/counselor/TodayOverviewCard";
 import GoogleConnectBanner from "@/components/counselor/GoogleConnectBanner";
 import CounselorStatsRow from "@/components/counselor/CounselorStatsRow";
 import CalendarCard from "@/components/dashboard/CalendarCard";
@@ -110,19 +109,11 @@ export function CounselorDashboardNextSessionSection({
 
 export function CounselorDashboardSidebarSection({ todayIso }: { todayIso: string }) {
   const { data: appointments = EMPTY_APPOINTMENTS } = useAppointments("counselor");
-  const dashboardAppointments = useMemo(
-    () => selectCounselorDashboardAppointments(todayIso)(appointments),
-    [appointments, todayIso],
-  );
 
   return (
     <div className="flex flex-col gap-6">
       <GoogleConnectBanner />
       <CalendarCard appointments={appointments} />
-      <TodayOverviewCard
-        pending={dashboardAppointments.todayPending}
-        scheduled={dashboardAppointments.todayScheduled}
-      />
     </div>
   );
 }

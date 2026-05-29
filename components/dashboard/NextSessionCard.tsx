@@ -1,6 +1,7 @@
 "use client";
 
 import { Video, MoreVertical } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -91,12 +92,12 @@ export default function NextSessionCard({
 
   if (!appointment) {
     return (
-      <div className="relative overflow-hidden bg-[var(--md-sys-color-primary)] rounded-[1.5rem] p-5 md:p-6 flex flex-col md:flex-row items-center gap-4 text-white shadow-xl opacity-80">
+      <div className="relative overflow-hidden bg-[var(--guidance-next-session-bg)] rounded-[1.5rem] p-5 md:p-6 flex flex-col md:flex-row items-center gap-4 text-white shadow-xl">
         <div className="flex-1 text-center md:text-left">
           <h2 className="text-2xl md:text-3xl font-medium mb-1">
             No Sessions Scheduled
           </h2>
-          <p className="text-white opacity-80 text-base">
+          <p className="text-white/85 text-base">
             Book an appointment to start your journey.
           </p>
         </div>
@@ -118,13 +119,16 @@ export default function NextSessionCard({
     .toUpperCase();
 
   return (
-    <div className="relative overflow-hidden bg-[var(--md-sys-color-primary)] rounded-[1.5rem] p-5 md:p-6 flex flex-col md:flex-row items-center gap-4 text-white shadow-xl">
+    <div className="relative overflow-hidden bg-[var(--guidance-next-session-bg)] rounded-[1.5rem] p-5 md:p-6 flex flex-col md:flex-row items-center gap-4 text-white shadow-xl">
       <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white/20 overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
         {participantAvatar ? (
-          <img
+          <Image
             src={participantAvatar}
             alt={profileName}
-            className="h-full w-full object-cover"
+            width={96}
+            height={96}
+            className="object-cover"
+            sizes="96px"
             loading="lazy"
             decoding="async"
           />

@@ -92,7 +92,7 @@ function AppointmentItem({
       }}
     >
       <div className={`${colorClass} w-20 h-20 rounded-2xl flex flex-col items-center justify-center shrink-0`}>
-        <span className="text-[10px] font-medium uppercase tracking-widest opacity-60">{month}</span>
+        <span className="text-[10px] font-medium uppercase tracking-widest opacity-75">{month}</span>
         <span className="text-3xl font-medium">{day}</span>
       </div>
 
@@ -140,33 +140,50 @@ function AppointmentItem({
   );
 }
 
-export default function AppointmentsSections({ sections }: { sections: AppointmentSection[] }) {
+export default function AppointmentsSections({
+  sections,
+  maxItems,
+}: {
+  sections: AppointmentSection[];
+  maxItems?: number;
+}) {
   return (
     <div className="flex flex-col gap-6">
-      {sections.map((section) => (
-        <section key={section.title} className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-medium text-[var(--md-sys-color-on-surface)]">{section.title}</h2>
-            {section.headerAction ?? getDefaultHeaderAction(section)}
-          </div>
+      {sections.map((section) => {
+        const visible = maxItems ? section.appointments.slice(0, maxItems) : section.appointments;
+        const hasMore = maxItems ? section.appointments.length > maxItems : false;
 
-          <div className="flex flex-col gap-3">
-            {section.appointments.length > 0 ? (
-              section.appointments.map((appointment) => (
-                <AppointmentItem
-                  key={appointment.appointment_id}
-                  appointment={appointment}
-                  renderActions={section.renderActions}
-                  getParticipantName={section.getParticipantName}
-                  participantNameFallback={section.participantNameFallback}
-                />
-              ))
-            ) : (
-              <p className="text-[var(--md-sys-color-on-surface-variant)] text-center py-5">{section.emptyMessage}</p>
-            )}
-          </div>
-        </section>
-      ))}
+        return (
+          <section key={section.title} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-medium text-[var(--md-sys-color-on-surface)]">{section.title}</h2>
+              {section.headerAction ?? getDefaultHeaderAction(section)}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {visible.length > 0 ? (
+                visible.map((appointment) => (
+                  <AppointmentItem
+                    key={appointment.appointment_id}
+                    appointment={appointment}
+                    renderActions={section.renderActions}
+                    getParticipantName={section.getParticipantName}
+                    participantNameFallback={section.participantNameFallback}
+                  />
+                ))
+              ) : (
+                <p className="text-[var(--md-sys-color-on-surface-variant)] text-center py-5">{section.emptyMessage}</p>
+              )}
+            </div>
+
+            {hasMore ? (
+              <p className="text-xs text-center text-[var(--md-sys-color-on-surface-variant)]">
+                +{section.appointments.length - maxItems!} more in <Link href="/appointments" className="font-medium text-[var(--md-sys-color-primary)]">Appointments</Link>
+              </p>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }

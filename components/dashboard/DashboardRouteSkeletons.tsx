@@ -10,21 +10,6 @@ function PulseBlock({ className }: PulseBlockProps) {
   );
 }
 
-export function DashboardWelcomeHeaderSkeleton() {
-  return (
-    <div className="flex flex-col justify-between gap-4 py-8 md:flex-row md:items-center">
-      <div className="space-y-3">
-        <PulseBlock className="h-12 w-64 md:h-14 md:w-80" />
-        <PulseBlock className="h-5 w-48 md:w-72" />
-      </div>
-      <div className="space-y-2 md:text-right">
-        <PulseBlock className="h-3 w-16 md:ml-auto" />
-        <PulseBlock className="h-7 w-28 md:ml-auto" />
-      </div>
-    </div>
-  );
-}
-
 export function DashboardStatsRowSkeleton({ compact = false }: { compact?: boolean }) {
   const cardClassName = compact ? "rounded-2xl p-5 gap-2" : "rounded-3xl p-8 gap-3";
   const valueClassName = compact ? "h-9 w-16" : "h-12 w-20";
@@ -55,18 +40,11 @@ export function DashboardStatsRowSkeleton({ compact = false }: { compact?: boole
 
 export function DashboardHeroCardSkeleton() {
   return (
-    <div className="relative overflow-hidden rounded-[1.5rem] bg-[var(--md-sys-color-primary)] p-5 md:p-6 text-white shadow-xl">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center">
-        <PulseBlock className="h-20 w-20 rounded-full bg-white/20 md:h-24 md:w-24" />
-        <div className="flex-1 space-y-3">
-          <PulseBlock className="h-5 w-28 rounded-full bg-white/20" />
-          <PulseBlock className="h-10 w-2/3 bg-white/20" />
-          <PulseBlock className="h-4 w-1/2 bg-white/20" />
-        </div>
-        <div className="flex gap-2">
-          <PulseBlock className="h-11 w-36 rounded-xl bg-white/20" />
-          <PulseBlock className="h-11 w-11 rounded-xl bg-white/20" />
-        </div>
+    <div className="relative overflow-hidden rounded-[1.5rem] bg-[var(--guidance-next-session-bg)] p-5 md:p-6 shadow-xl">
+      <div className="flex flex-col items-center gap-3 text-center md:text-left">
+        <div className="animate-pulse rounded-full bg-white/20 h-5 w-28" />
+        <div className="animate-pulse rounded-2xl bg-white/20 h-8 w-2/3" />
+        <div className="animate-pulse rounded-2xl bg-white/20 h-4 w-1/2" />
       </div>
     </div>
   );
@@ -203,9 +181,7 @@ export function DashboardSidebarSkeleton({
           <DashboardCardSkeleton showRows={4} />
           <DashboardCardSkeleton showRows={1} />
         </>
-      ) : (
-        <DashboardTodayOverviewSkeleton />
-      )}
+      ) : null}
     </div>
   );
 }
