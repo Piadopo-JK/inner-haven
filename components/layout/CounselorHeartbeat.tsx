@@ -17,7 +17,6 @@ export default function CounselorHeartbeat() {
       } = await supabase.auth.getSession();
 
       if (!session || disposed) {
-        console.log("[presence:counselor] skipped start, missing session or disposed");
         return;
       }
 
@@ -28,7 +27,6 @@ export default function CounselorHeartbeat() {
         .maybeSingle();
 
       if (!counselor?.counselor_id || disposed) {
-        console.log("[presence:counselor] skipped start, no counselor mapping");
         return;
       }
 
@@ -41,7 +39,6 @@ export default function CounselorHeartbeat() {
       });
 
       channel.subscribe(async (status) => {
-        console.log("[presence:counselor] channel status", status);
         if (status !== "SUBSCRIBED") {
           return;
         }
@@ -51,15 +48,12 @@ export default function CounselorHeartbeat() {
           role: "counselor",
           connected_at: new Date().toISOString(),
         });
-
-        console.log("[presence:counselor] tracked", counselor.counselor_id);
       });
     }
 
     void startPresence();
 
     const onBeforeUnload = () => {
-      console.log("[presence:counselor] beforeunload untrack");
       void channel?.untrack();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
@@ -67,7 +61,6 @@ export default function CounselorHeartbeat() {
     return () => {
       disposed = true;
       window.removeEventListener("beforeunload", onBeforeUnload);
-      console.log("[presence:counselor] cleanup untrack + removeChannel");
       void channel?.untrack();
       if (channel) {
         void supabase.removeChannel(channel);

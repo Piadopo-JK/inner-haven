@@ -50,11 +50,7 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
 
   return (
     <main
-      className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4"
-      style={{
-        background:
-          "radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--md-sys-color-primary-container) 25%, transparent), transparent 55%), var(--md-sys-color-surface)",
-      }}
+      className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4 anonymous-hub-bg"
     >
       <section className="hidden h-full gap-4 md:grid md:grid-cols-[320px_1fr]">
         <aside

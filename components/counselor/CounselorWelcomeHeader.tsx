@@ -18,7 +18,7 @@ export default function CounselorWelcomeHeader({ name }: { name: string }) {
           Welcome back, {name}.
         </h1>
         <p className="text-xl text-[var(--md-sys-color-on-surface-variant)] font-medium italic">
-          {dateStr} <span className="mx-2">—</span> <span className="opacity-70">Support with clarity today.</span>
+          {dateStr} <span className="mx-2">—</span> <span className="opacity-85">Support with clarity today.</span>
         </p>
       </div>
       <div className="text-right flex flex-col items-end">

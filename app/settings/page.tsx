@@ -23,6 +23,7 @@ import {
   loadProfileSettings,
 } from "@/lib/settings/server";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { requireStudentProfile } from "@/lib/supabase/require-student-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,11 @@ export default async function SettingsPage({
   const sessionUser = await getSessionUser();
 
   if (!sessionUser) {
-    redirect("/auth/login");
+    redirect("/login");
+  }
+
+  if (sessionUser.role === "student") {
+    await requireStudentProfile(sessionUser.userId);
   }
 
   const params = await searchParams;
@@ -57,10 +62,7 @@ export default async function SettingsPage({
   const showProfile = activeCategory === "profile" || !["schedule", "integrations"].includes(activeCategory);
 
   return (
-    <main
-      className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:flex-row"
-      style={{ background: "var(--md-sys-color-background)" }}
-    >
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 bg-[var(--md-sys-color-background)] px-4 py-6 md:flex-row">
       <SettingsSidebar userRole={sessionUser.role} />
 
       <section className="flex-1 space-y-4">
@@ -111,6 +113,14 @@ async function ProfileSettingsSection({
 }) {
   const queryClient = makeQueryClient();
   const profile = await loadProfileSettings(sessionUser);
+
+  if (!profile) {
+    return (
+      <div className="rounded-2xl border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-6 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
+        Profile data is not available yet. Please complete onboarding first.
+      </div>
+    );
+  }
 
   queryClient.setQueryData(profileQueryOptions().queryKey, profile);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { Mail } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { CounselorDirectoryItemDTO } from "@/lib/booking/contracts";
 
@@ -65,10 +66,12 @@ export default function CounselorCard({
           </span>
         ) : null}
         {counselor.avatar_url ? (
-          <img
+          <Image
             src={counselor.avatar_url}
             alt={counselor.name}
-            className="absolute inset-0 h-full w-full object-cover"
+            fill
+            className="object-cover"
+            sizes="120px"
             style={{ borderRadius: "20px 20px 0 0" }}
           />
         ) : (

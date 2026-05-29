@@ -128,24 +128,17 @@ export default function AnonymousMessagingHub({
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center gap-8 p-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+          <h1 className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
             Private Support Chat
           </h1>
-          <p
-            className="mt-3 max-w-sm text-sm leading-relaxed"
-            style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-          >
+          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
             GuidanceGo uses a pseudonymous identity so counselors do not see your account details.
             Your identity is tied to your signed-in account.
           </p>
         </div>
         <div className="grid w-full gap-3">
           <Button
-            className="rounded-full py-6 text-base font-semibold"
-            style={{
-              background: "var(--md-sys-color-primary)",
-              color: "var(--md-sys-color-on-primary)",
-            }}
+            className="rounded-full bg-[var(--md-sys-color-primary)] py-6 text-base font-semibold text-[var(--md-sys-color-on-primary)]"
             onClick={() => setView("confirming-new")}
           >
             Start a private conversation
@@ -204,11 +197,7 @@ export default function AnonymousMessagingHub({
 
   return (
     <main
-      className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4"
-      style={{
-        background:
-          "radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--md-sys-color-primary-container) 25%, transparent), transparent 55%), var(--md-sys-color-surface)",
-      }}
+      className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4 anonymous-hub-bg"
     >
       <section className="hidden h-full gap-4 md:grid md:grid-cols-[320px_1fr]">
         <aside

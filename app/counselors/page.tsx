@@ -1,15 +1,17 @@
 export const dynamic = "force-dynamic";
 
 import AvailableCounselorsList from "@/components/counselor/AvailableCounselorsList";
-import { bookingService } from "@/lib/booking/service";
+import { getCounselorsCached } from "@/lib/cache/appointments-cache";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { redirect } from "next/navigation";
 
 export default async function CounselorsPage() {
-  const [counselors, sessionUser] = await Promise.all([
-    bookingService.listCounselors(),
-    getSessionUser(),
-  ]);
-  const canBook = sessionUser?.role === "student";
+  const sessionUser = await getSessionUser();
+  if (sessionUser?.role !== "student") {
+    redirect("/dashboard");
+  }
+
+  const counselors = await getCounselorsCached();
 
   return (
     <main
@@ -18,8 +20,8 @@ export default async function CounselorsPage() {
     >
       <div className="mx-auto max-w-6xl space-y-8">
         <section
-          className="rounded-[20px] bg-white px-8 py-10 shadow-md"
-          style={{ boxShadow: "var(--md-sys-elevation-level2)" }}
+          className="rounded-[20px] px-8 py-10"
+          style={{ background: "var(--md-sys-color-surface-container-low)", boxShadow: "var(--md-sys-elevation-level2)" }}
         >
           <h1
             className="text-4xl font-bold"
@@ -36,7 +38,7 @@ export default async function CounselorsPage() {
           </p>
         </section>
 
-        <AvailableCounselorsList counselors={counselors} canBook={canBook} canMessage={canBook} />
+        <AvailableCounselorsList counselors={counselors} canBook canMessage />
       </div>
     </main>
   );

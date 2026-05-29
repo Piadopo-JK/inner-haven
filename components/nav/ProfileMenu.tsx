@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Settings } from "lucide-react";
@@ -22,10 +23,12 @@ export default function ProfileMenu() {
     : "U";
 
   const avatarContent = avatarUrl ? (
-    <img
+    <Image
       src={avatarUrl}
       alt="Profile"
-      className="h-full w-full object-cover"
+      fill
+      className="object-cover"
+      sizes="32px"
       loading="lazy"
       decoding="async"
     />
@@ -45,7 +48,7 @@ export default function ProfileMenu() {
     <div className="relative" ref={dropdownRef}>
       <Link
         href="/settings"
-        className="md:hidden rounded-full h-10 w-10 overflow-hidden flex items-center justify-center transition-opacity hover:opacity-80"
+        className="md:hidden relative rounded-full h-10 w-10 overflow-hidden flex items-center justify-center transition-opacity hover:opacity-80"
         style={{
           border: "2px solid var(--md-sys-color-outline-variant)",
           boxShadow: "0 0 0 2px var(--md-sys-color-surface)",
@@ -58,7 +61,7 @@ export default function ProfileMenu() {
       <button
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
         onMouseEnter={() => setIsDropdownOpen(true)}
-        className="hidden md:flex rounded-full h-10 w-10 overflow-hidden items-center justify-center transition-opacity hover:opacity-80"
+        className="hidden md:flex relative rounded-full h-10 w-10 overflow-hidden items-center justify-center transition-opacity hover:opacity-80"
         style={{
           border: "2px solid var(--md-sys-color-outline-variant)",
           boxShadow: "0 0 0 2px var(--md-sys-color-surface)",
