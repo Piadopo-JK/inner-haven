@@ -14,8 +14,6 @@ type SaveProfileInput = {
   about: string;
   specialization: string;
   officeRoom: string;
-  yearLevel: string;
-  course: string;
 };
 
 type UploadAvatarResponse = {
@@ -63,8 +61,6 @@ export function useSaveProfile() {
           about: input.about,
           specialization: input.specialization,
           office_room: input.officeRoom,
-          year_level: input.yearLevel,
-          course: input.course,
         }),
       });
 
@@ -102,14 +98,6 @@ export function useSaveProfile() {
               current.role === "counselor"
                 ? normalizeString(input.officeRoom)
                 : current.office_room,
-            year_level:
-              current.role === "student"
-                ? normalizeString(input.yearLevel)
-                : current.year_level,
-            course:
-              current.role === "student"
-                ? normalizeString(input.course)
-                : current.course,
           };
         },
       );

@@ -15,6 +15,7 @@ import {
   appointmentsQueryOptions,
   queryKeys,
 } from "@/lib/query/queries";
+import { debouncedInvalidate } from "@/lib/query/debounce-invalidate";
 import type { AppointmentDTO, SessionMode, SessionRole } from "@/lib/booking/contracts";
 export type {
   AppointmentTab,
@@ -121,7 +122,7 @@ export function useAppointmentsRealtimeSync(role: SessionRole) {
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments" },
         () => {
-          void queryClient.invalidateQueries({
+          debouncedInvalidate(queryClient, {
             queryKey: queryKeys.appointments(role),
           });
         },
@@ -221,14 +222,14 @@ export function useCancelCounselorAppointment() {
     },
 
     onSettled: (_appointment, _error, appointmentId, context) => {
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointments("counselor"),
       });
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointmentDetails(appointmentId),
       });
       if (context?.counselorId) {
-        void queryClient.invalidateQueries({
+        debouncedInvalidate(queryClient, {
           queryKey: queryKeys.availabilityByCounselor(context.counselorId),
         });
       }
@@ -296,7 +297,7 @@ export function useSaveAppointment() {
         appointment,
       );
 
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.availabilityByCounselor(appointment.counselor_id),
       });
 
@@ -304,7 +305,7 @@ export function useSaveAppointment() {
         context?.previousDetail &&
         context.previousDetail.counselor_id !== appointment.counselor_id
       ) {
-        void queryClient.invalidateQueries({
+        debouncedInvalidate(queryClient, {
           queryKey: queryKeys.availabilityByCounselor(
             context.previousDetail.counselor_id,
           ),
@@ -322,12 +323,12 @@ export function useSaveAppointment() {
     },
 
     onSettled: (_appointment, _error, input) => {
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointments("student"),
       });
 
       if (input.appointmentId) {
-        void queryClient.invalidateQueries({
+        debouncedInvalidate(queryClient, {
           queryKey: queryKeys.appointmentDetails(input.appointmentId),
         });
       }
@@ -423,14 +424,14 @@ export function useUpdateCounselorAppointmentStatus() {
     },
 
     onSettled: (_appointment, _error, { appointmentId, status }, context) => {
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointments("counselor"),
       });
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointmentDetails(appointmentId),
       });
       if (status === "cancelled" && context?.counselorId) {
-        void queryClient.invalidateQueries({
+        debouncedInvalidate(queryClient, {
           queryKey: queryKeys.availabilityByCounselor(context.counselorId),
         });
       }
@@ -508,10 +509,10 @@ export function useRescheduleCounselorAppointment() {
     },
 
     onSettled: (_result, _error, { appointmentId }) => {
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointments("counselor"),
       });
-      void queryClient.invalidateQueries({
+      debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointmentDetails(appointmentId),
       });
     },

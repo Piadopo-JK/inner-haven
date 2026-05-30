@@ -13,8 +13,6 @@ export type ProfileSettingsCachePayload = {
   about?: string | null;
   specialization?: string | null;
   office_room?: string | null;
-  year_level?: string | null;
-  course?: string | null;
 };
 import type {
   AppointmentDTO,

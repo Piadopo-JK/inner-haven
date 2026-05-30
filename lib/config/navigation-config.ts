@@ -30,6 +30,7 @@ export const primaryNavItems: NavItem[] = [
     label: "Counselor Directory",
     href: "/counselors",
     icon: Users,
+    roles: ["student"],
   },
   {
     id: "appointments",
