@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Md3Message } from "@/components/ui/md3-message";
 import { AvatarPicker, type AvatarPickerHandle } from "@/components/ui/avatar-picker";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
   useDeleteProfileAvatar,
   useProfile,
@@ -28,8 +30,6 @@ export default function ProfileAppearanceSettingsCard() {
   const [about, setAbout] = React.useState("");
   const [specialization, setSpecialization] = React.useState("");
   const [officeRoom, setOfficeRoom] = React.useState("");
-  const [yearLevel, setYearLevel] = React.useState("");
-  const [course, setCourse] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const isAvatarSubmitting = isUploadingAvatar || isDeletingAvatar;
@@ -41,8 +41,6 @@ export default function ProfileAppearanceSettingsCard() {
     setAbout(profile.about ?? "");
     setSpecialization(profile.specialization ?? "");
     setOfficeRoom(profile.office_room ?? "");
-    setYearLevel(profile.year_level ?? "");
-    setCourse(profile.course ?? "");
   }, [profile]);
 
   React.useEffect(() => {
@@ -67,8 +65,6 @@ export default function ProfileAppearanceSettingsCard() {
         about,
         specialization,
         officeRoom,
-        yearLevel,
-        course,
       });
       setSuccess("Profile settings saved.");
     } catch (err) {
@@ -124,12 +120,22 @@ export default function ProfileAppearanceSettingsCard() {
         </Md3Message>
       ) : (
         <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Theme</p>
+              <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                Switch between light, dark, or system theme.
+              </p>
+            </div>
+            <ThemeSwitcher />
+          </div>
+
           <div className="space-y-2">
             <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Current Avatar</p>
             <div className="flex items-center gap-4 rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full" style={{ border: "1px solid var(--md-sys-color-outline-variant)" }}>
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full" style={{ border: "1px solid var(--md-sys-color-outline-variant)" }}>
                 {avatarUrl.trim() ? (
-                  <img src={avatarUrl.trim()} alt={profile?.name || "Profile"} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                  <Image src={avatarUrl.trim()} alt={profile?.name || "Profile"} fill className="object-cover" sizes="64px" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-lg font-semibold" style={{ background: "var(--md-sys-color-primary-container)", color: "var(--md-sys-color-on-primary-container)" }}>
                     {initials}
@@ -145,21 +151,23 @@ export default function ProfileAppearanceSettingsCard() {
             </div>
           </div>
 
-          {profile?.role === "counselor" && previewUrl && (
+          {previewUrl && (
             <div className="space-y-3">
               <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Photo Preview (Adjustable)</p>
               <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                Drag to reposition or scroll to zoom. See how your photo appears in the counselor directory.
+                Drag to reposition or scroll to zoom.
               </p>
               <div className="flex flex-wrap items-end gap-6 rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
                 <div className="flex flex-col items-center gap-2">
-                  <AvatarPicker imageUrl={previewUrl} initials={initials} displaySize="small" />
+                  <AvatarPicker ref={avatarPickerLargeRef} imageUrl={previewUrl} initials={initials} displaySize="small" />
                   <span className="text-[11px]" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Profile avatar</span>
                 </div>
-                <div className="flex flex-col items-center gap-2">
-                  <AvatarPicker ref={avatarPickerLargeRef} imageUrl={previewUrl} initials={initials} displaySize="large" />
-                  <span className="text-[11px] text-center" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Directory card</span>
-                </div>
+                {profile?.role === "counselor" && (
+                  <div className="flex flex-col items-center gap-2">
+                    <AvatarPicker imageUrl={previewUrl} initials={initials} displaySize="large" />
+                    <span className="text-[11px] text-center" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Directory card</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -196,18 +204,7 @@ export default function ProfileAppearanceSettingsCard() {
                 <Input value={officeRoom} onChange={(e) => setOfficeRoom(e.target.value)} placeholder="e.g. Room 204, Guidance Office" maxLength={100} />
               </label>
             </>
-          ) : (
-            <>
-              <label className="block text-sm">
-                Year Level
-                <Input value={yearLevel} onChange={(e) => setYearLevel(e.target.value)} placeholder="e.g. 2nd Year, Grade 11" maxLength={50} />
-              </label>
-              <label className="block text-sm">
-                Course / Program
-                <Input value={course} onChange={(e) => setCourse(e.target.value)} placeholder="e.g. BS Computer Science" maxLength={200} />
-              </label>
-            </>
-          )}
+          ) : null}
 
           <div className="flex items-center gap-3">
             <Button type="button" onClick={handleSave} disabled={isSaving || isAvatarSubmitting}>

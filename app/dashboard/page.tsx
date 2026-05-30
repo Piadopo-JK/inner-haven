@@ -3,7 +3,7 @@ import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { cache, Suspense } from "react";
 
 import { bookingService } from "@/lib/booking/service";
-import { getAppointmentsByUserCached } from "@/lib/cache/appointments-cache";
+import { getAppointmentsByUserCached, getCounselorsCached, getStudentsCached } from "@/lib/cache/appointments-cache";
 import { makeQueryClient } from "@/lib/query/client";
 import {
   appointmentsQueryOptions,
@@ -39,9 +39,9 @@ const getStudentAppointments = cache(async (studentId: string) =>
   getAppointmentsByUserCached("student", studentId),
 );
 
-const getStudents = cache(async () => bookingService.listStudents());
+const getStudents = cache(async () => getStudentsCached());
 
-const getCounselors = cache(async () => bookingService.listCounselors());
+const getCounselors = cache(async () => getCounselorsCached());
 
 const getCounselorUnreadMessages = cache(async (counselorId: string) =>
   bookingService.countUnreadNotifications("counselor", counselorId),
@@ -60,12 +60,18 @@ export default async function DashboardPage() {
   const todayIso = new Date().toISOString().split("T")[0];
 
   if (!sessionUser) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   if (sessionUser.role === "counselor") {
     const counselorName = sessionUser.email?.split("@")[0] || "Counselor";
     return <CounselorView counselorId={sessionUser.userId} counselorName={counselorName} todayIso={todayIso} />;
+  }
+
+  // Student: ensure onboarding is complete before rendering the dashboard.
+  const studentId = await bookingService.resolveStudentId(sessionUser.userId);
+  if (!studentId) {
+    redirect("/onboarding");
   }
 
   const userName = sessionUser.email?.split("@")[0] || "Student";

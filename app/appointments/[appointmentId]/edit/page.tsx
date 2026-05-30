@@ -2,10 +2,12 @@ import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { redirect } from "next/navigation";
 
 import BookingForm from "@/components/appointments/BookingForm";
+import { getCounselorsCached } from "@/lib/cache/appointments-cache";
 import { bookingService } from "@/lib/booking/service";
 import { makeQueryClient } from "@/lib/query/client";
 import { counselorsQueryOptions } from "@/lib/query/queries";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { requireStudentProfile } from "@/lib/supabase/require-student-profile";
 
 type EditAppointmentPageProps = {
   params: Promise<{ appointmentId: string }>;
@@ -14,8 +16,10 @@ type EditAppointmentPageProps = {
 export default async function EditAppointmentPage({ params }: EditAppointmentPageProps) {
   const sessionUser = await getSessionUser();
   if (!sessionUser || sessionUser.role !== "student") {
-    redirect("/auth/login");
+    redirect("/login");
   }
+
+  await requireStudentProfile(sessionUser.userId);
 
   const { appointmentId } = await params;
   const [appointments, counselors] = await Promise.all([
@@ -23,7 +27,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       role: "student",
       student_id: sessionUser.userId,
     }),
-    bookingService.listCounselors(),
+    getCounselorsCached(),
   ]);
   const appointment = appointments.find((item) => item.appointment_id === appointmentId);
 

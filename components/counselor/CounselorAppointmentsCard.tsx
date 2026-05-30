@@ -45,7 +45,7 @@ function AppointmentActions({
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10" disabled={isBusy}>
+        <Button variant="ghost" size="icon" aria-label="Appointment actions" className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10" disabled={isBusy}>
           <MoreVertical className="w-5 h-5" />
         </Button>
       </DropdownMenuTrigger>
@@ -139,6 +139,7 @@ export default function CounselorAppointmentsCard({
       ) : null}
 
       <AppointmentsSections
+        maxItems={8}
         sections={[
           {
             title: "Upcoming Appointments",

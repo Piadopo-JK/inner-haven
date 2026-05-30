@@ -1,9 +1,11 @@
 import { ArrowLeft } from "lucide-react";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import SessionNotesEditor from "@/components/appointments/SessionNotesEditor";
+import { getCounselorsCached, getStudentsCached } from "@/lib/cache/appointments-cache";
 import { bookingService } from "@/lib/booking/service";
 import { makeQueryClient } from "@/lib/query/client";
 import {
@@ -11,6 +13,7 @@ import {
   sessionNotesQueryOptions,
 } from "@/lib/query/queries";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { requireStudentProfile } from "@/lib/supabase/require-student-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -35,19 +38,24 @@ export default async function AppointmentNotesPage({
 }) {
   const sessionUser = await getSessionUser();
   if (!sessionUser) {
-    redirect("/auth/login");
+    redirect("/login");
+  }
+
+  if (sessionUser.role === "student") {
+    await requireStudentProfile(sessionUser.userId);
   }
 
   const { appointmentId } = await params;
 
-  const [appointment, counselors, students, sessionNote, viewerEntityId] = await Promise.all([
+  const viewerEntityId = sessionUser.role === "student"
+    ? await bookingService.resolveStudentId(sessionUser.userId)
+    : await bookingService.resolveCounselorId(sessionUser.userId);
+
+  const [appointment, counselors, students, sessionNote] = await Promise.all([
     bookingService.getAppointmentById(appointmentId),
-    sessionUser.role === "student" ? bookingService.listCounselors() : Promise.resolve([]),
-    sessionUser.role === "counselor" ? bookingService.listStudents() : Promise.resolve([]),
+    sessionUser.role === "student" ? getCounselorsCached() : Promise.resolve([]),
+    sessionUser.role === "counselor" ? getStudentsCached() : Promise.resolve([]),
     bookingService.getSessionNote(appointmentId),
-    sessionUser.role === "student"
-      ? bookingService.resolveStudentId(sessionUser.userId)
-      : bookingService.resolveCounselorId(sessionUser.userId),
   ]);
 
   if (
@@ -98,12 +106,11 @@ export default async function AppointmentNotesPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <main className="min-h-screen px-4 py-8 md:px-8" style={{ background: "var(--md-sys-color-background)" }}>
+      <main className="min-h-screen bg-[var(--md-sys-color-background)] px-4 py-8 md:px-8">
         <div className="mx-auto w-full max-w-6xl">
         <Link
           href={`/appointments/${appointmentId}`}
-          className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium"
-          style={{ color: "var(--md-sys-color-primary)" }}
+          className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--md-sys-color-primary)]"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Session Details
@@ -120,11 +127,11 @@ export default async function AppointmentNotesPage({
                 style={elevatedCardStyle}
               >
                 <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-full p-[2px]" style={{ background: "var(--md-sys-color-primary)" }}>
+                  <div className="h-16 w-16 rounded-full bg-[var(--md-sys-color-primary)] p-[2px]">
                     <div className="h-full w-full rounded-full bg-[var(--md-sys-color-surface)] p-[2px]">
-                      <div className="h-full w-full overflow-hidden rounded-full bg-[var(--md-sys-color-surface-container-high)]">
+                      <div className="relative h-full w-full overflow-hidden rounded-full bg-[var(--md-sys-color-surface-container-high)]">
                         {participantAvatar ? (
-                          <img src={participantAvatar} alt={participantName} className="h-full w-full object-cover" />
+                          <Image src={participantAvatar} alt={participantName} fill className="object-cover" sizes="64px" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-lg font-bold text-[var(--md-sys-color-on-surface-variant)]">
                             {initials || "?"}

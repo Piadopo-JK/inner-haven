@@ -12,7 +12,7 @@ export default async function CounselorLayout({
   const sessionUser = await getSessionUser();
 
   if (!sessionUser) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
   if (sessionUser.role !== "counselor") {

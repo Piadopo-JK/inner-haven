@@ -1,4 +1,5 @@
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { requireStudentProfile } from "@/lib/supabase/require-student-profile";
 import { bookingService } from "@/lib/booking/service";
 import { SessionRole } from "@/lib/booking/contracts";
 import NotificationsList from "@/components/notifications/NotificationsList";
@@ -12,6 +13,9 @@ export default async function NotificationsPage() {
   let userId: string | undefined;
 
   if (sessionUser) {
+    if (sessionUser.role === "student") {
+      await requireStudentProfile(sessionUser.userId);
+    }
     role = sessionUser.role;
     userId = sessionUser.userId;
   }
@@ -20,10 +24,7 @@ export default async function NotificationsPage() {
 
   return (
     <main className="mx-auto w-full max-w-3xl p-4">
-      <h1
-        className="mb-6 text-xl font-semibold"
-        style={{ color: "var(--md-sys-color-on-surface)" }}
-      >
+      <h1 className="mb-6 text-xl font-semibold text-[var(--md-sys-color-on-surface)]">
         Notifications
       </h1>
       <NotificationsList notifications={notifications} role={role} userId={userId} />

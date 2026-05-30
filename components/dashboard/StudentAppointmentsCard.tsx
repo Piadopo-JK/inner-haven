@@ -52,6 +52,7 @@ function AppointmentActions({
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Appointment actions"
           className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10"
           disabled={isBusy}
         >
@@ -111,6 +112,7 @@ export default function StudentAppointmentsCard({
     <Card className="border-0 shadow-none bg-transparent p-0">
       {error ? <Md3Message tone="error" className="mb-3">{error}</Md3Message> : null}
       <AppointmentsSections
+        maxItems={8}
         sections={[
           {
             title: "Upcoming Appointments",

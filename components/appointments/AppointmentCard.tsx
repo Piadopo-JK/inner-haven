@@ -1,6 +1,7 @@
 "use client";
 
 import { Calendar, Clock, MoreVertical } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -166,9 +167,9 @@ export default function AppointmentCard({
     >
       <div className="flex items-center justify-between min-w-0 gap-3">
         <div className="flex gap-4 min-w-0 flex-1">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--md-sys-color-surface-container-highest)] flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="relative w-16 h-16 rounded-2xl bg-[var(--md-sys-color-surface-container-highest)] flex items-center justify-center shrink-0 overflow-hidden">
             {participantAvatar ? (
-              <img src={participantAvatar} alt={participantName} className="w-full h-full object-cover" />
+              <Image src={participantAvatar!} alt={participantName ?? "Participant"} fill className="object-cover" sizes="64px" />
             ) : (
               <div className="text-2xl font-bold text-[var(--md-sys-color-on-surface-variant)]">
                 {participantName?.charAt(0) || "U"}
@@ -177,9 +178,9 @@ export default function AppointmentCard({
           </div>
 
           <div className="flex flex-col gap-1 min-w-0 max-w-full">
-            <h3 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] truncate">
+            <h2 className="text-xl font-bold text-[var(--md-sys-color-on-surface)] truncate">
               {participantName || "Unknown User"}
-            </h3>
+            </h2>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--md-sys-color-on-surface-variant)] font-medium">
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
@@ -214,6 +215,7 @@ export default function AppointmentCard({
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label="Appointment actions"
                 className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10"
                 disabled={isCancelling}
               >

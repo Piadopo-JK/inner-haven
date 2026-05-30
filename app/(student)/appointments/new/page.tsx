@@ -1,7 +1,7 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import { redirect } from "next/navigation";
 
-import { bookingService } from "@/lib/booking/service";
+import { getCounselorsCached } from "@/lib/cache/appointments-cache";
 import { makeQueryClient } from "@/lib/query/client";
 import { counselorsQueryOptions } from "@/lib/query/queries";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
@@ -11,10 +11,10 @@ export default async function NewAppointmentPage() {
   const sessionUser = await getSessionUser();
 
   if (!sessionUser) {
-    redirect("/auth/login");
+    redirect("/login");
   }
 
-  const counselors = await bookingService.listCounselors();
+  const counselors = await getCounselorsCached();
   const queryClient = makeQueryClient();
   queryClient.setQueryData(counselorsQueryOptions().queryKey, counselors);
 

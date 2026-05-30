@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { User, Info, ArrowLeftRight } from "lucide-react";
 import { CounselorDirectoryItemDTO } from "@/lib/booking/contracts";
 
@@ -14,7 +15,7 @@ export default function CounselorProfileCard({ counselor, onSwitchCounselor }: C
       <div className="flex flex-col md:flex-row gap-8 items-start">
         <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden shrink-0 border-4 border-[var(--md-sys-color-primary-container)]">
           {counselor.avatar_url ? (
-            <img src={counselor.avatar_url} alt={counselor.name} className="h-full w-full object-cover" />
+            <Image src={counselor.avatar_url} alt={counselor.name} fill className="object-cover" sizes="128px" />
           ) : (
             <div className="w-full h-full bg-[var(--md-sys-color-surface-container-high)] flex items-center justify-center">
               <User className="w-12 h-12 text-[var(--md-sys-color-on-surface-variant)] opacity-20" />

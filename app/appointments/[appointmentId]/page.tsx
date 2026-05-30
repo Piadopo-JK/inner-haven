@@ -1,11 +1,12 @@
 import { ArrowLeft, Calendar, Clock, Video } from "lucide-react";
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import SessionDetailsActions, { SessionStatusPill } from "@/components/appointments/SessionDetailsActions";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import { getAppointmentByIdCached, getSessionNoteCached } from "@/lib/cache/appointments-cache";
+import { getAppointmentByIdCached, getSessionNoteCached, getCounselorsCached, getStudentsCached } from "@/lib/cache/appointments-cache";
 import { bookingService } from "@/lib/booking/service";
 import { makeQueryClient } from "@/lib/query/client";
 import {
@@ -13,6 +14,7 @@ import {
   sessionNotesQueryOptions,
 } from "@/lib/query/queries";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
+import { requireStudentProfile } from "@/lib/supabase/require-student-profile";
 
 type AppointmentDetailsPageProps = {
   params: Promise<{ appointmentId: string }>;
@@ -20,14 +22,18 @@ type AppointmentDetailsPageProps = {
 
 export default async function AppointmentDetailsPage({ params }: AppointmentDetailsPageProps) {
   const sessionUser = await getSessionUser();
-  if (!sessionUser) redirect("/auth/login");
+  if (!sessionUser) redirect("/login");
+
+  if (sessionUser.role === "student") {
+    await requireStudentProfile(sessionUser.userId);
+  }
 
   const { appointmentId } = await params;
 
   const [appointment, counselors, students, currentSessionNote] = await Promise.all([
     getAppointmentByIdCached(sessionUser.role, sessionUser.userId, appointmentId),
-    sessionUser.role === "student" ? bookingService.listCounselors() : Promise.resolve([]),
-    sessionUser.role === "counselor" ? bookingService.listStudents() : Promise.resolve([]),
+    sessionUser.role === "student" ? getCounselorsCached() : Promise.resolve([]),
+    sessionUser.role === "counselor" ? getStudentsCached() : Promise.resolve([]),
     getSessionNoteCached(sessionUser.role, sessionUser.userId, appointmentId),
   ]);
 
@@ -127,16 +133,18 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
                 className="w-28 h-28 rounded-full p-1 mt-2 shrink-0"
                 style={{ background: "var(--md-sys-color-primary)" }}
               >
-                <div className="w-full h-full rounded-full p-[3px] bg-white">
+                <div className="w-full h-full rounded-full bg-[var(--md-sys-color-surface)] p-[3px]">
                   <div
-                    className="w-full h-full rounded-full overflow-hidden"
+                    className="relative w-full h-full rounded-full overflow-hidden"
                     style={{ background: "var(--md-sys-color-surface-container-high)" }}
                   >
                     {participantAvatar ? (
-                      <img
+                      <Image
                         src={participantAvatar}
                         alt={participantName}
-                        className="w-full h-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="112px"
                       />
                     ) : (
                       <div
