@@ -159,14 +159,13 @@ function LogoRow({ expanded }: { expanded: boolean }) {
       style={{ height: `${LOGO_CONTAINER_HEIGHT}px`, width: "100%" }}
     >
       <div
-        className="shrink-0 flex items-center justify-center"
+        className="relative shrink-0 flex items-center justify-center"
         style={{ width: `${ICON_COL}px`, height: `${LOGO_CONTAINER_HEIGHT}px` }}
       >
         <Image
           src="/assets/IconRet.png"
           alt="GuidanceGO logo"
-          width={64}
-          height={52}
+          fill
           className="object-contain"
           priority
         />
@@ -180,38 +179,34 @@ function LogoRow({ expanded }: { expanded: boolean }) {
           transitionDelay: expanded ? "75ms" : "0ms",
         }}
       >
-        {/* Main text: "Guidance" and "GO" */}
         <div className="flex items-baseline gap-0">
           <span
-            className="whitespace-nowrap leading-tight"
+            className="whitespace-nowrap leading-tight text-[#003D99] dark:text-white"
             style={{
               fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif",
               fontWeight: 700,
               fontSize: "18px",
-              color: "#003D99",
             }}
           >
             Guidance
           </span>
           <span
-            className="whitespace-nowrap leading-tight"
+            className="whitespace-nowrap leading-tight text-[#4CAF50] dark:text-white"
             style={{
               fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif",
               fontWeight: 700,
               fontSize: "18px",
-              color: "#4CAF50",
             }}
           >
             GO
           </span>
         </div>
         <span
-          className="whitespace-nowrap leading-tight"
+          className="whitespace-nowrap leading-tight text-[#666666] dark:text-white"
           style={{
             fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Inter', sans-serif",
             fontWeight: 400,
             fontSize: "10px",
-            color: "#666666",
             marginTop: "2px",
           }}
         >
@@ -412,6 +407,7 @@ export default function SidebarClient({
       <div
         className={`fixed inset-0 z-[70] md:hidden ${isMobileOpen ? "pointer-events-auto" : "pointer-events-none"}`}
         aria-hidden={!isMobileOpen}
+        {...(!isMobileOpen ? ({ inert: true } as any) : {})}
       >
         <button
           type="button"
