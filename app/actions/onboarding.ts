@@ -1,12 +1,13 @@
 "use server";
+
+import { bookingService } from "@/lib/booking/service";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 export async function setupStudentProfile(prevState: any, formData: FormData) {
   const name = formData.get("name") as string;
-  const course = formData.get("course") as string | null; // Optional
-  
+
   if (!name || name.trim() === "") {
     return { error: "Name is required" };
   }
@@ -18,24 +19,17 @@ export async function setupStudentProfile(prevState: any, formData: FormData) {
     return { error: "You must be logged in to set up your profile." };
   }
 
-  // Insert into students table
-  const { error } = await supabase
-    .from("students")
-    .insert({
-      auth_user_id: user.id,
-      name: name.trim(),
+  try {
+    await bookingService.ensureStudentProfile({
+      authUserId: user.id,
       email: user.email,
+      name: name.trim(),
     });
-
-  if (error) {
-    // If it's a unique constraint violation (user already exists), that's fine, we can just proceed.
-    if (error.code !== "23505") {
-      console.error("Error setting up profile:", error);
-      return { error: "Failed to create profile. Please try again." };
-    }
+  } catch (e) {
+    console.error("Error setting up profile:", e);
+    return { error: "Failed to create profile. Please try again." };
   }
 
-  // We are successful! Revalidate dashboard and redirect
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }
