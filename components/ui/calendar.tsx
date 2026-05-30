@@ -27,18 +27,18 @@ export function Calendar({
         month_grid: "w-full table-fixed border-collapse",
         weekdays: "w-full",
         weekday:
-          "h-9 text-center text-[0.8rem] font-normal text-[var(--md-sys-color-on-surface-variant)]",
+          "h-9 text-center text-[0.8rem] font-normal text-[var(--md-sys-color-on-surface)]",
         week: "w-full",
         day: "p-0 text-center text-sm align-middle",
         day_button: cn(
-          "mx-auto h-9 w-9 rounded-md p-0 font-normal transition-colors",
+          "mx-auto h-9 w-9 rounded-md p-0 font-normal transition-colors bg-transparent text-[var(--md-sys-color-on-surface)]",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]",
         ),
         selected:
           "bg-[var(--md-sys-color-primary)] text-white hover:bg-[var(--md-sys-color-primary)] hover:text-white",
         today:
           "bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]",
-        outside: "text-[var(--md-sys-color-on-surface-variant)] opacity-50",
+        outside: "text-[var(--md-sys-color-on-surface-variant)] opacity-60",
         disabled: "opacity-40",
         hidden: "invisible",
         ...classNames,
