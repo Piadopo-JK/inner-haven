@@ -8,7 +8,7 @@ import { BookingRepository } from "@/lib/booking/repository";
 import { SupabaseBookingRepository } from "@/lib/booking/supabase-repository";
 import { createMeetSpace } from "@/lib/google-meet/client";
 
-class BookingService {
+export class BookingService {
   constructor(private repo: BookingRepository) {}
 
   listCounselors() {
@@ -65,7 +65,7 @@ class BookingService {
           } catch (error) {
             const message = error instanceof Error ? error.message : "";
             const isReconnectableTokenError =
-              /invalid_grant|invalid refresh token|token has been expired|token has been revoked|failed to obtain google access token/i.test(
+              /invalid_grant|invalid (refresh token|credentials)|token has been expired|token has been revoked|failed to obtain google access token/i.test(
                 message,
               );
 
@@ -121,6 +121,15 @@ class BookingService {
 
   resolveStudentId(id: string) {
     return this.repo.resolveStudentId(id);
+  }
+
+  ensureStudentProfile(input: {
+    authUserId: string;
+    email?: string;
+    name?: string | null;
+    avatarUrl?: string | null;
+  }) {
+    return this.repo.ensureStudentProfile(input);
   }
 
   getCounselorSchedule(counselorId: string) {

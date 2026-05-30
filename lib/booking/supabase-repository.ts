@@ -18,26 +18,26 @@ import { BookingRepository } from "@/lib/booking/repository";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
-function normalizeTime(value: string) {
+export function normalizeTime(value: string) {
   return value.slice(0, 5);
 }
 
-function parseDateParts(date: string) {
+export function parseDateParts(date: string) {
   const [year, month, day] = date.split("-").map(Number);
   return { year, month, day };
 }
 
-function getUtcDayOfWeek(date: string) {
+export function getUtcDayOfWeek(date: string) {
   const { year, month, day } = parseDateParts(date);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
 
-function timeToMinutes(value: string) {
+export function timeToMinutes(value: string) {
   const [hours, minutes] = normalizeTime(value).split(":").map(Number);
   return hours * 60 + minutes;
 }
 
-function minutesToTime(value: number) {
+export function minutesToTime(value: number) {
   const hours = Math.floor(value / 60)
     .toString()
     .padStart(2, "0");
@@ -45,7 +45,7 @@ function minutesToTime(value: number) {
   return `${hours}:${minutes}`;
 }
 
-function normalizeBreaks(raw: unknown): AvailabilityBreakDTO[] {
+export function normalizeBreaks(raw: unknown): AvailabilityBreakDTO[] {
   if (!Array.isArray(raw)) {
     return [];
   }
@@ -74,7 +74,7 @@ function normalizeBreaks(raw: unknown): AvailabilityBreakDTO[] {
     });
 }
 
-function isOverlappingBreak(slotStart: number, slotEnd: number, breaks: AvailabilityBreakDTO[]) {
+export function isOverlappingBreak(slotStart: number, slotEnd: number, breaks: AvailabilityBreakDTO[]) {
   return breaks.some((breakRange) => {
     const breakStart = timeToMinutes(breakRange.start_time);
     const breakEnd = timeToMinutes(breakRange.end_time);
@@ -82,7 +82,7 @@ function isOverlappingBreak(slotStart: number, slotEnd: number, breaks: Availabi
   });
 }
 
-function generateSlotsFromRule(rule: ScheduleRuleRow) {
+export function generateSlotsFromRule(rule: ScheduleRuleRow) {
   const start = timeToMinutes(rule.start_time);
   const end = timeToMinutes(rule.end_time);
   const duration = Math.max(15, Math.min(180, rule.slot_duration_minutes ?? 60));
@@ -272,12 +272,7 @@ function isMissingColumnError(error: unknown, table: string, column: string) {
 }
 
 export class SupabaseBookingRepository implements BookingRepository {
-  /**
-   * ID resolution uses the service client so that RLS policies on the
-   * students/counselors tables never silently block a lookup and cause the
-   * resolver to fall back to the raw auth UUID (which would then fail to
-   * match stored primary-key references throughout the DB).
-   */
+  // uses service client to prevent rls from silently blocking id lookups
   async resolveStudentId(id: string) {
     const supabase = createServiceClient();
 
@@ -303,6 +298,41 @@ export class SupabaseBookingRepository implements BookingRepository {
     }
 
     return byAuth.student_id as string;
+  }
+
+  async ensureStudentProfile(input: {
+    authUserId: string;
+    email?: string;
+    name?: string | null;
+    avatarUrl?: string | null;
+  }): Promise<{ created: boolean; studentId: string | null }> {
+    const existing = await this.resolveStudentId(input.authUserId);
+    if (existing) {
+      return { created: false, studentId: existing };
+    }
+
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("students")
+      .insert({
+        auth_user_id: input.authUserId,
+        name: input.name || input.email?.split("@")[0] || "Student",
+        email: input.email,
+        avatar_url: input.avatarUrl ?? null,
+      })
+      .select("student_id")
+      .maybeSingle();
+
+    if (error) {
+      // Unique constraint — race with onboarding action, treat as already exists
+      if (error.code === "23505") {
+        const retry = await this.resolveStudentId(input.authUserId);
+        return { created: false, studentId: retry };
+      }
+      throw error;
+    }
+
+    return { created: true, studentId: data?.student_id ?? null };
   }
 
   async resolveCounselorId(id: string) {
