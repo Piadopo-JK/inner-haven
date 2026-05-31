@@ -64,7 +64,17 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
             Anonymous Queue
           </h1>
           <ThreadList
-            threads={threads}
+            threads={threads.map((t) => ({
+              id: t.id,
+              counselorId: "",
+              counselorName: t.anonymousLabel,
+              anonymousLabel: t.anonymousLabel,
+              status: t.status,
+              createdAt: t.createdAt,
+              updatedAt: t.updatedAt,
+              lastMessagePreview: t.lastMessagePreview,
+              lastMessageAt: t.lastMessageAt,
+            }))}
             selectedThreadId={selectedThreadId}
             onSelect={setSelectedThreadId}
             anonymousView
@@ -73,7 +83,20 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
 
         <div className="min-h-0">
           {selectedThread ? (
-            <AnonymousChat thread={selectedThread} sender="counselor" />
+            <AnonymousChat
+              thread={{
+                id: selectedThread.id,
+                counselorId: "",
+                counselorName: selectedThread.anonymousLabel,
+                anonymousLabel: selectedThread.anonymousLabel,
+                status: selectedThread.status,
+                createdAt: selectedThread.createdAt,
+                updatedAt: selectedThread.updatedAt,
+                lastMessagePreview: selectedThread.lastMessagePreview,
+                lastMessageAt: selectedThread.lastMessageAt,
+              }}
+              sender="counselor"
+            />
           ) : (
             <section
               className="flex h-full items-center justify-center rounded-2xl border p-6"
@@ -93,7 +116,21 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
       <section className="flex h-full md:hidden">
         {selectedThread ? (
           <div className="h-full w-full min-h-0">
-            <AnonymousChat thread={selectedThread} sender="counselor" onBack={() => setSelectedThreadId(undefined)} />
+            <AnonymousChat
+              thread={{
+                id: selectedThread.id,
+                counselorId: "",
+                counselorName: selectedThread.anonymousLabel,
+                anonymousLabel: selectedThread.anonymousLabel,
+                status: selectedThread.status,
+                createdAt: selectedThread.createdAt,
+                updatedAt: selectedThread.updatedAt,
+                lastMessagePreview: selectedThread.lastMessagePreview,
+                lastMessageAt: selectedThread.lastMessageAt,
+              }}
+              sender="counselor"
+              onBack={() => setSelectedThreadId(undefined)}
+            />
           </div>
         ) : (
           <aside
@@ -107,7 +144,17 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
               Anonymous Queue
             </h1>
             <ThreadList
-              threads={threads}
+              threads={threads.map((t) => ({
+                id: t.id,
+                counselorId: "",
+                counselorName: t.anonymousLabel,
+                anonymousLabel: t.anonymousLabel,
+                status: t.status,
+                createdAt: t.createdAt,
+                updatedAt: t.updatedAt,
+                lastMessagePreview: t.lastMessagePreview,
+                lastMessageAt: t.lastMessageAt,
+              }))}
               selectedThreadId={selectedThreadId}
               onSelect={setSelectedThreadId}
               anonymousView

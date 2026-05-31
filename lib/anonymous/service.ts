@@ -2,7 +2,7 @@ import {
   addMessage,
   getAnonymousThreadById,
   getOrCreateThread,
-  resolveIdentityOwnerAuthUserIdByThreadId,
+  resolveThreadOwnerAuthUserId,
   resolveStudentIdByAuthUserId,
 } from "@/lib/anonymous/repository";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -66,11 +66,11 @@ async function upsertAnonymousThreadNotification(params: {
 }
 
 export async function createThreadWithFirstMessage(
-  identityId: string,
+  ownerAuthUserId: string,
   counselorId: string,
   message: string,
 ): Promise<{ threadId: string }> {
-  const thread = await getOrCreateThread(identityId, counselorId);
+  const thread = await getOrCreateThread(ownerAuthUserId, counselorId);
   await addMessage(thread.id, "student", message);
 
   const preview = message.slice(0, 120);
@@ -106,7 +106,7 @@ export async function sendCounselorMessage(
 ): Promise<void> {
   await addMessage(threadId, "counselor", message, counselorId);
 
-  const ownerAuthUserId = await resolveIdentityOwnerAuthUserIdByThreadId(threadId);
+  const ownerAuthUserId = await resolveThreadOwnerAuthUserId(threadId);
   const studentId = ownerAuthUserId ? await resolveStudentIdByAuthUserId(ownerAuthUserId) : null;
   if (studentId) {
     await upsertAnonymousThreadNotification({

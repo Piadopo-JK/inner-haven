@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, SendHorizonal } from "lucide-react";
+import { ArrowLeft, RefreshCw, SendHorizonal } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { AnonymousThreadMessage, AnonymousThreadSummary } from "@/components/anonymous/types";
@@ -17,9 +17,10 @@ type Props = {
   thread: AnonymousThreadSummary;
   sender: "student" | "counselor";
   onBack?: () => void;
+  onNewConversation?: () => void;
 };
 
-export default function AnonymousChat({ thread, sender, onBack }: Props) {
+export default function AnonymousChat({ thread, sender, onBack, onNewConversation }: Props) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -27,6 +28,8 @@ export default function AnonymousChat({ thread, sender, onBack }: Props) {
   const { mutateAsync: sendAnonymousMessage, isPending: isSending } = useSendAnonymousMessage(thread.id);
 
   useAnonymousThreadRealtimeSync(thread.id, sender);
+
+  const isDetached = thread.status === "detached";
 
   function scrollToBottom(behavior: ScrollBehavior = "auto") {
     const container = messagesContainerRef.current;
@@ -101,14 +104,30 @@ export default function AnonymousChat({ thread, sender, onBack }: Props) {
         >
           {(sender === "student" ? thread.counselorName : thread.anonymousLabel).slice(0, 2).toUpperCase()}
         </div>
-        <div>
+        <div className="flex-1">
           <p className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
             {sender === "student" ? thread.counselorName : thread.anonymousLabel}
           </p>
           <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-            {sender === "student" ? "Counselor" : "Anonymous student"}
+            {sender === "student"
+              ? `You · ${thread.anonymousLabel}`
+              : isDetached
+                ? "Anonymous student · Thread closed"
+                : "Anonymous student"}
           </p>
         </div>
+        {sender === "student" && onNewConversation && !isDetached ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-full text-xs"
+            onClick={onNewConversation}
+            title="Start a new conversation with a different identity"
+          >
+            <RefreshCw className="mr-1 h-3 w-3" />
+            New
+          </Button>
+        ) : null}
       </header>
 
       <div className="flex justify-center px-4 pt-3">
@@ -156,47 +175,60 @@ export default function AnonymousChat({ thread, sender, onBack }: Props) {
         )}
       </div>
 
-      <form
-        onSubmit={sendMessage}
-        className="border-t p-3"
-        style={{
-          borderColor: "var(--md-sys-color-outline-variant)",
-          background: "var(--md-sys-color-surface-container)",
-        }}
-      >
-        {error ? (
-          <p className="mb-2 text-xs" style={{ color: "var(--md-sys-color-error)" }}>
-            {error}
-          </p>
-        ) : null}
-        <div className="flex items-end gap-2">
-          <textarea
-            rows={2}
-            className="flex-1 resize-none rounded-xl border px-3 py-2 text-sm"
-            style={{
-              borderColor: "var(--md-sys-color-outline)",
-              background: "var(--md-sys-color-surface)",
-              color: "var(--md-sys-color-on-surface)",
-            }}
-            value={draft}
-            onChange={(event) => {
-              setDraft(event.target.value);
-              scrollToBottom("auto");
-            }}
-            placeholder={sender === "student" ? "Type your follow-up message..." : "Type your professional response..."}
-          />
-
-          <Button
-            type="submit"
-            className="h-11 w-11 self-end rounded-full p-0"
-            style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
-            aria-label="Send message"
-            disabled={isSending || !draft.trim()}
-          >
-            <SendHorizonal className="h-4 w-4" />
-          </Button>
+      {sender === "counselor" && isDetached ? (
+        <div
+          className="border-t p-4 text-center text-sm"
+          style={{
+            borderColor: "var(--md-sys-color-outline-variant)",
+            color: "var(--md-sys-color-on-surface-variant)",
+            background: "var(--md-sys-color-surface-container)",
+          }}
+        >
+          This conversation is closed. The user can no longer be reached.
         </div>
-      </form>
+      ) : (
+        <form
+          onSubmit={sendMessage}
+          className="border-t p-3"
+          style={{
+            borderColor: "var(--md-sys-color-outline-variant)",
+            background: "var(--md-sys-color-surface-container)",
+          }}
+        >
+          {error ? (
+            <p className="mb-2 text-xs" style={{ color: "var(--md-sys-color-error)" }}>
+              {error}
+            </p>
+          ) : null}
+          <div className="flex items-end gap-2">
+            <textarea
+              rows={2}
+              className="flex-1 resize-none rounded-xl border px-3 py-2 text-sm"
+              style={{
+                borderColor: "var(--md-sys-color-outline)",
+                background: "var(--md-sys-color-surface)",
+                color: "var(--md-sys-color-on-surface)",
+              }}
+              value={draft}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                scrollToBottom("auto");
+              }}
+              placeholder={sender === "student" ? "Type your follow-up message..." : "Type your professional response..."}
+            />
+
+            <Button
+              type="submit"
+              className="h-11 w-11 self-end rounded-full p-0"
+              style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+              aria-label="Send message"
+              disabled={isSending || !draft.trim()}
+            >
+              <SendHorizonal className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

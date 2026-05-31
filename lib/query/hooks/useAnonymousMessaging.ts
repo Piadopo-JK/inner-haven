@@ -9,7 +9,8 @@ import type {
   AnonymousSender,
   AnonymousThreadMessage,
   AnonymousThreadSummary,
-  VerifiedAnonymousIdentity,
+  StudentAnonymousThreads,
+  CounselorAnonymousThreadSummary,
 } from "@/lib/anonymous/types";
 import {
   anonymousCounselorThreadsQueryOptions,
@@ -17,11 +18,6 @@ import {
   anonymousThreadMessagesQueryOptions,
   queryKeys,
 } from "@/lib/query/queries";
-
-type CreateAnonymousIdentityResponse = {
-  identityId: string;
-  expiresAt: string;
-};
 
 type CreateAnonymousThreadInput = {
   counselorId: string;
@@ -79,24 +75,24 @@ export function useAnonymousIdentity() {
   });
 }
 
-export function useAnonymousIdentityRealtimeSync(identityId?: string) {
+export function useAnonymousIdentityRealtimeSync() {
   const queryClient = useQueryClient();
+  const { data } = useAnonymousIdentity();
 
   useEffect(() => {
-    if (!identityId) {
+    if (!data?.threads?.length) {
       return;
     }
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`anonymous-identity-${identityId}`)
+      .channel("anonymous-student-threads")
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "anonymous_threads",
-          filter: `anonymous_identity_id=eq.${identityId}`,
         },
         () => {
           void queryClient.invalidateQueries({
@@ -109,34 +105,54 @@ export function useAnonymousIdentityRealtimeSync(identityId?: string) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [identityId, queryClient]);
+  }, [data, queryClient]);
 }
 
-export function useCreateAnonymousIdentity() {
+export function useCreateAnonymousThread() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/anonymous-requests/identity", {
+    mutationFn: async ({ counselorId, message }: CreateAnonymousThreadInput) => {
+      const response = await fetch("/api/anonymous-threads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ counselorId, message }),
+      });
+
+      return parseMutationPayload<CreateAnonymousThreadResponse>(
+        response,
+        "Unable to create anonymous thread.",
+      );
+    },
+
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousIdentity(),
+      });
+    },
+  });
+}
+
+export function useDetachThread() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (threadId: string) => {
+      const response = await fetch(`/api/anonymous-threads/${threadId}/detach`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
 
-      return parseMutationPayload<CreateAnonymousIdentityResponse>(
+      return parseMutationPayload<{ ok: true }>(
         response,
-        "Unable to create anonymous identity.",
+        "Unable to detach thread.",
       );
     },
 
-    onSuccess: ({ identityId, expiresAt }) => {
-      queryClient.setQueryData<VerifiedAnonymousIdentity>(
-        queryKeys.anonymousIdentity(),
-        {
-          identityId,
-          expiresAt,
-          threads: [],
-        },
-      );
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousIdentity(),
+      });
     },
   });
 }
@@ -173,31 +189,6 @@ export function useCounselorAnonymousThreadsRealtimeSync() {
       void supabase.removeChannel(channel);
     };
   }, [queryClient]);
-}
-
-export function useCreateAnonymousThread() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ counselorId, message }: CreateAnonymousThreadInput) => {
-      const response = await fetch("/api/anonymous-threads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ counselorId, message }),
-      });
-
-      return parseMutationPayload<CreateAnonymousThreadResponse>(
-        response,
-        "Unable to create anonymous thread.",
-      );
-    },
-
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.anonymousIdentity(),
-      });
-    },
-  });
 }
 
 export function useAnonymousThreadMessages(threadId: string) {
@@ -289,10 +280,10 @@ export function useSendAnonymousMessage(threadId: string) {
         queryKeys.anonymousThreadMessages(threadId),
       );
       const previousIdentity = queryClient.getQueryData<
-        VerifiedAnonymousIdentity | null
+        StudentAnonymousThreads | null
       >(queryKeys.anonymousIdentity());
       const previousCounselorThreads = queryClient.getQueryData<
-        AnonymousThreadSummary[]
+        CounselorAnonymousThreadSummary[]
       >(queryKeys.anonymousCounselorThreads());
 
       queryClient.setQueryData<AnonymousThreadMessage[]>(
@@ -301,7 +292,7 @@ export function useSendAnonymousMessage(threadId: string) {
       );
 
       if (sender === "student") {
-        queryClient.setQueryData<VerifiedAnonymousIdentity | null>(
+        queryClient.setQueryData<StudentAnonymousThreads | null>(
           queryKeys.anonymousIdentity(),
           (current) =>
             current
@@ -317,16 +308,16 @@ export function useSendAnonymousMessage(threadId: string) {
               : current,
         );
       } else {
-        queryClient.setQueryData<AnonymousThreadSummary[] | undefined>(
+        queryClient.setQueryData<CounselorAnonymousThreadSummary[] | undefined>(
           queryKeys.anonymousCounselorThreads(),
           (current) =>
             current
               ? patchThreadPreview(
-                  current,
+                  current as unknown as AnonymousThreadSummary[],
                   threadId,
                   trimmedMessage,
                   createdAt,
-                )
+                ) as unknown as CounselorAnonymousThreadSummary[]
               : current,
         );
       }

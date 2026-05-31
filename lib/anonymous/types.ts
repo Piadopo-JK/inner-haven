@@ -1,14 +1,21 @@
 export type AnonymousSender = "student" | "counselor";
 
+export type ThreadStatus = "active" | "detached";
+
 export type AnonymousThreadSummary = {
   id: string;
   counselorId: string;
   counselorName: string;
   anonymousLabel: string;
+  status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
   lastMessagePreview?: string;
   lastMessageAt?: string;
+};
+
+export type StudentAnonymousThreads = {
+  threads: AnonymousThreadSummary[];
 };
 
 export type AnonymousThreadMessage = {
@@ -19,8 +26,12 @@ export type AnonymousThreadMessage = {
   createdAt: string;
 };
 
-export type VerifiedAnonymousIdentity = {
-  identityId: string;
-  expiresAt: string;
-  threads: AnonymousThreadSummary[];
+export type CounselorAnonymousThreadSummary = {
+  id: string;
+  anonymousLabel: string;
+  status: ThreadStatus;
+  createdAt: string;
+  updatedAt: string;
+  lastMessagePreview?: string;
+  lastMessageAt?: string;
 };

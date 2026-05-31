@@ -11,10 +11,8 @@ import { LOADING_MESSAGES } from "@/lib/loading/states";
 import {
   useAnonymousIdentity,
   useAnonymousIdentityRealtimeSync,
-  useCreateAnonymousIdentity,
+  useDetachThread,
 } from "@/lib/query/hooks/useAnonymousMessaging";
-
-type HubView = "splash" | "confirming-new" | "verified";
 
 export default function AnonymousMessagingHub({
   counselorId,
@@ -23,96 +21,61 @@ export default function AnonymousMessagingHub({
   counselorId?: string;
   threadId?: string;
 }) {
-  const [view, setView] = useState<HubView>("splash");
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
-  const [createError, setCreateError] = useState("");
-  const {
-    data: verified = null,
-    isLoading: isCheckingIdentity,
-    refetch: refetchIdentity,
-  } = useAnonymousIdentity();
-  const {
-    mutateAsync: createAnonymousIdentity,
-    isPending: creatingIdentity,
-  } = useCreateAnonymousIdentity();
+  const [showDetachConfirm, setShowDetachConfirm] = useState(false);
+  const [detachError, setDetachError] = useState("");
+  const { data: studentThreads, isLoading: isChecking } = useAnonymousIdentity();
+  const { mutateAsync: detachThread, isPending: isDetaching } = useDetachThread();
 
-  useAnonymousIdentityRealtimeSync(verified?.identityId);
+  useAnonymousIdentityRealtimeSync();
+
+  const threads = studentThreads?.threads ?? [];
 
   useEffect(() => {
-    if (isCheckingIdentity) {
-      return;
-    }
-
-    setView((current) => {
-      if (verified) {
-        return "verified";
-      }
-
-      return current === "confirming-new" ? current : "splash";
-    });
-  }, [isCheckingIdentity, verified]);
-
-  useEffect(() => {
-    if (!verified) {
+    if (!studentThreads) {
       setSelectedThreadId(undefined);
       return;
     }
 
     setSelectedThreadId((previous) => {
-      if (previous && verified.threads.some((thread) => thread.id === previous)) {
+      if (previous && threads.some((t) => t.id === previous)) {
         return previous;
       }
 
       if (threadId) {
-        const threadMatch = verified.threads.find((thread) => thread.id === threadId);
-        if (threadMatch) {
-          return threadMatch.id;
-        }
+        const match = threads.find((t) => t.id === threadId);
+        if (match) return match.id;
       }
 
       if (counselorId) {
-        const counselorMatch = verified.threads.find(
-          (thread) => thread.counselorId === counselorId,
-        );
-        if (counselorMatch) {
-          return counselorMatch.id;
-        }
+        const match = threads.find((t) => t.counselorId === counselorId);
+        if (match) return match.id;
       }
 
-      if (verified.threads.length === 1) {
-        return verified.threads[0]!.id;
-      }
+      if (threads.length === 1) return threads[0]!.id;
 
       return undefined;
     });
-  }, [verified, counselorId, threadId]);
+  }, [studentThreads, counselorId, threadId, threads]);
 
-  async function handleCreateIdentity() {
-    setCreateError("");
+  const selectedThread = threads.find((t) => t.id === selectedThreadId) ?? null;
+  const activeThreadWithCounselor = counselorId
+    ? threads.find((t) => t.counselorId === counselorId)
+    : null;
+
+  async function handleDetachAndNewConversation() {
+    if (!selectedThreadId) return;
+    setDetachError("");
 
     try {
-      await createAnonymousIdentity();
-      setView("verified");
+      await detachThread(selectedThreadId);
+      setShowDetachConfirm(false);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : "Unable to create identity. Try again.");
+      setDetachError(err instanceof Error ? err.message : "Unable to detach thread.");
     }
   }
 
-  async function handleThreadCreated({ threadId }: { threadId: string }) {
-    const result = await refetchIdentity();
-    if (result.data) {
-      setView("verified");
-    }
-    setSelectedThreadId(threadId);
-  }
-
-  const selectedThread = verified?.threads.find((t) => t.id === selectedThreadId) ?? null;
-  const hasThreadForCounselor = counselorId
-    ? (verified?.threads ?? []).some((t) => t.counselorId === counselorId)
-    : false;
-  const showComposer = Boolean(counselorId && !hasThreadForCounselor);
-
-  if (isCheckingIdentity) {
+  if (isChecking) {
     return (
       <main className="mx-auto min-h-[60vh] max-w-lg p-8">
         <LoaderAnimations />
@@ -124,31 +87,7 @@ export default function AnonymousMessagingHub({
     );
   }
 
-  if (view === "splash") {
-    return (
-      <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center gap-8 p-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
-            Private Support Chat
-          </h1>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
-            GuidanceGo uses a pseudonymous identity so counselors do not see your account details.
-            Your identity is tied to your signed-in account.
-          </p>
-        </div>
-        <div className="grid w-full gap-3">
-          <Button
-            className="rounded-full bg-[var(--md-sys-color-primary)] py-6 text-base font-semibold text-[var(--md-sys-color-on-primary)]"
-            onClick={() => setView("confirming-new")}
-          >
-            Start a private conversation
-          </Button>
-        </div>
-      </main>
-    );
-  }
-
-  if (view === "confirming-new") {
+  if (showDetachConfirm && selectedThread) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center p-8">
         <div
@@ -156,18 +95,20 @@ export default function AnonymousMessagingHub({
           style={{ borderColor: "var(--md-sys-color-outline-variant)" }}
         >
           <h2 className="text-lg font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-            Before you continue
+            Start a new conversation?
           </h2>
           <p
             className="mt-3 text-sm leading-relaxed"
             style={{ color: "var(--md-sys-color-on-surface-variant)" }}
           >
-            A private pseudonymous identity will be created for this account.
-            It is automatically managed for this signed-in session.
+            This will close your existing conversation with{" "}
+            <strong>{selectedThread.counselorName}</strong>.
+            The counselor will see your previous messages but you will no longer
+            be able to access them. A new pseudonymous label will be used.
           </p>
-          {createError ? (
+          {detachError ? (
             <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
-              {createError}
+              {detachError}
             </p>
           ) : null}
           <div className="mt-6 flex flex-col gap-3">
@@ -177,19 +118,76 @@ export default function AnonymousMessagingHub({
                 background: "var(--md-sys-color-primary)",
                 color: "var(--md-sys-color-on-primary)",
               }}
-              disabled={creatingIdentity}
-              onClick={handleCreateIdentity}
+              disabled={isDetaching}
+              onClick={handleDetachAndNewConversation}
             >
-              {creatingIdentity ? "Creating…" : "Create private identity"}
+              {isDetaching ? "Closing…" : "Close & start new"}
             </Button>
             <Button
               variant="ghost"
               className="rounded-full"
-              onClick={() => setView("splash")}
+              onClick={() => {
+                setShowDetachConfirm(false);
+                setDetachError("");
+              }}
             >
               Cancel
             </Button>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (counselorId && !activeThreadWithCounselor) {
+    return (
+      <main className="mx-auto flex min-h-[60vh] max-w-lg p-8">
+        <div className="w-full">
+          {threads.length > 0 ? (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full text-xs"
+                onClick={() => setSelectedThreadId(threads[0]!.id)}
+              >
+                ← Back to conversations
+              </Button>
+            </div>
+          ) : null}
+          <AnonymousRequestForm
+            counselorId={counselorId}
+            onCreated={() => {
+            }}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  if (threads.length === 0 && !counselorId) {
+    return (
+      <main
+        className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4 anonymous-hub-bg"
+      >
+        <div
+          className="flex h-full items-center justify-center rounded-2xl border p-6"
+          style={{
+            borderColor: "var(--md-sys-color-outline-variant)",
+            background: "var(--md-sys-color-surface-container-low)",
+          }}
+        >
+          <p className="text-sm" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+            No conversations yet.{" "}
+            <a
+              href="/counselors"
+              className="underline"
+              style={{ color: "var(--md-sys-color-primary)" }}
+            >
+              Visit the counselor directory
+            </a>{" "}
+            to start one.
+          </p>
         </div>
       </main>
     );
@@ -214,40 +212,12 @@ export default function AnonymousMessagingHub({
             >
               Conversations
             </h2>
-            <button
-              type="button"
-              className="text-xs underline"
-              style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-              onClick={() => {
-                setSelectedThreadId(undefined);
-                setCreateError("");
-                setView("splash");
-              }}
-            >
-              Switch identity
-            </button>
           </div>
           <ThreadList
-            threads={verified?.threads ?? []}
+            threads={threads}
             selectedThreadId={selectedThreadId}
             onSelect={setSelectedThreadId}
           />
-          {(verified?.threads ?? []).length === 0 && !counselorId ? (
-            <p
-              className="mt-3 text-xs leading-relaxed"
-              style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-            >
-              No conversations yet.{" "}
-              <a
-                href="/counselors"
-                className="underline"
-                style={{ color: "var(--md-sys-color-primary)" }}
-              >
-                Visit the counselor directory
-              </a>{" "}
-              to start one.
-            </p>
-          ) : null}
         </aside>
 
         <div
@@ -258,22 +228,24 @@ export default function AnonymousMessagingHub({
           }}
         >
           {selectedThread ? (
-            <AnonymousChat thread={selectedThread} sender="student" />
-          ) : counselorId && !hasThreadForCounselor ? (
-            <div className="h-full overflow-y-auto p-4">
-              <AnonymousRequestForm
-                counselorId={counselorId}
-                onCreated={handleThreadCreated}
-              />
-            </div>
+            <AnonymousChat
+              thread={selectedThread}
+              sender="student"
+              onNewConversation={
+                activeThreadWithCounselor
+                  ? () => {
+                      setSelectedThreadId(activeThreadWithCounselor.id);
+                      setShowDetachConfirm(true);
+                    }
+                  : undefined
+              }
+            />
           ) : (
             <div
               className="flex min-h-[240px] items-center justify-center p-6 text-sm"
               style={{ color: "var(--md-sys-color-on-surface-variant)" }}
             >
-              {(verified?.threads ?? []).length > 0
-                ? "Select a conversation to continue."
-                : "No conversations yet. Visit the counselor directory to start one."}
+              Select a conversation to continue.
             </div>
           )}
         </div>
@@ -286,44 +258,14 @@ export default function AnonymousMessagingHub({
               thread={selectedThread}
               sender="student"
               onBack={() => setSelectedThreadId(undefined)}
+              onNewConversation={
+                activeThreadWithCounselor
+                  ? () => {
+                      setShowDetachConfirm(true);
+                    }
+                  : undefined
+              }
             />
-          </div>
-        ) : showComposer ? (
-          <div
-            className="flex h-full w-full min-h-0 flex-col rounded-2xl border p-4"
-            style={{
-              borderColor: "var(--md-sys-color-outline-variant)",
-              background: "var(--md-sys-color-surface-container-low)",
-            }}
-          >
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                  New conversation
-                </h2>
-                <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                  Your first message starts the anonymous thread.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="text-xs underline"
-                style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-                onClick={() => {
-                  setSelectedThreadId(undefined);
-                  setCreateError("");
-                  setView("splash");
-                }}
-              >
-                Switch identity
-              </button>
-            </div>
-            <div className="min-h-0 overflow-y-auto">
-              <AnonymousRequestForm
-                counselorId={counselorId!}
-                onCreated={handleThreadCreated}
-              />
-            </div>
           </div>
         ) : (
           <aside
@@ -333,40 +275,20 @@ export default function AnonymousMessagingHub({
               background: "var(--md-sys-color-surface-container-low)",
             }}
           >
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                Conversations
-              </h2>
-              <button
-                type="button"
-                className="text-xs underline"
-                style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-                onClick={() => {
-                  setSelectedThreadId(undefined);
-                  setCreateError("");
-                  setView("splash");
-                }}
-              >
-                Switch identity
-              </button>
-            </div>
+            <h2 className="mb-3 text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+              Conversations
+            </h2>
             <ThreadList
-              threads={verified?.threads ?? []}
+              threads={threads}
               selectedThreadId={selectedThreadId}
               onSelect={setSelectedThreadId}
             />
-            {(verified?.threads ?? []).length === 0 && !counselorId ? (
-              <p
-                className="mt-3 text-xs leading-relaxed"
-                style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-              >
-                No conversations yet. <a href="/counselors" className="underline" style={{ color: "var(--md-sys-color-primary)" }}>Visit the counselor directory</a> to start one.
-              </p>
-            ) : null}
           </aside>
         )}
       </section>
     </main>
   );
 }
+
+
 

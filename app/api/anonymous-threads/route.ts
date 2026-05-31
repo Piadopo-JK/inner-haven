@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { verifyIdentityByOwner } from "@/lib/anonymous/repository";
 import { createThreadWithFirstMessage } from "@/lib/anonymous/service";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 
@@ -31,19 +30,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const identity = await verifyIdentityByOwner(sessionUser.userId);
-  if (!identity) {
-    return NextResponse.json({ error: "No active pseudonymous identity." }, { status: 401 });
-  }
-
   try {
     const { threadId } = await createThreadWithFirstMessage(
-      identity.identityId,
+      sessionUser.userId,
       counselorId,
       trimmedMessage,
     );
+
     return NextResponse.json({ threadId }, { status: 201 });
-  } catch {
+  } catch (err: unknown) {
+    const pgError = err as { code?: string };
+    if (pgError.code === "23505") {
+      return NextResponse.json(
+        { error: "An active thread already exists with this counselor. Detach it first to start a new one." },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json({ error: "Unable to create thread." }, { status: 500 });
   }
 }
