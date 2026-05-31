@@ -1,6 +1,6 @@
-import type { VerifiedAnonymousIdentity } from "@/lib/anonymous/types";
+import type { StudentAnonymousThreads } from "@/lib/anonymous/types";
 
-export type { AnonymousSender, AnonymousThreadSummary, AnonymousThreadMessage } from "@/lib/anonymous/types";
+export type { AnonymousSender, AnonymousThreadSummary, AnonymousThreadMessage, CounselorAnonymousThreadSummary } from "@/lib/anonymous/types";
 
 export type AnonymousCounselor = {
   counselorId: string;
@@ -9,4 +9,4 @@ export type AnonymousCounselor = {
   avatarUrl?: string | null;
 };
 
-export type VerifyIdentityResponse = VerifiedAnonymousIdentity;
+export type StudentThreadsResponse = StudentAnonymousThreads;
