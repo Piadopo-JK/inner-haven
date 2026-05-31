@@ -157,6 +157,30 @@ export function useDetachThread() {
   });
 }
 
+export function useDetachThreadByCounselor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (threadId: string) => {
+      const response = await fetch(`/api/anonymous-threads/${threadId}/counselor-detach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      return parseMutationPayload<{ ok: true }>(
+        response,
+        "Unable to detach thread.",
+      );
+    },
+
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousCounselorThreads(),
+      });
+    },
+  });
+}
+
 export function useAnonymousCounselorThreads() {
   return useQuery({
     ...anonymousCounselorThreadsQueryOptions(),

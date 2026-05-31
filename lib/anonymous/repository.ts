@@ -23,7 +23,7 @@ type ThreadRow = {
   last_seen_at: string | null;
   created_at: string;
   updated_at: string;
-  counselors?: Array<{ name: string | null }> | { name: string | null } | null;
+  counselors?: Array<{ name: string | null; avatar_url?: string | null }> | { name: string | null; avatar_url?: string | null } | null;
 };
 
 type MessageRow = {
@@ -45,7 +45,8 @@ function getAnonymousLabel(threadId: string) {
 function safeDecrypt(value: string) {
   try {
     return decryptAnonymousMessage(value);
-  } catch {
+  } catch (err) {
+    console.error("Failed to decrypt anonymous message", err);
     return "[Message unavailable]";
   }
 }
@@ -58,6 +59,16 @@ function getCounselorDisplayName(counselors: ThreadRow["counselors"]) {
     return counselors.name ?? "Counselor";
   }
   return "Counselor";
+}
+
+function getCounselorAvatarUrl(counselors: ThreadRow["counselors"]) {
+  if (Array.isArray(counselors)) {
+    return counselors[0]?.avatar_url ?? null;
+  }
+  if (counselors && typeof counselors === "object") {
+    return counselors.avatar_url ?? null;
+  }
+  return null;
 }
 
 function isExpired(expiresAt: string) {
@@ -161,7 +172,6 @@ export async function getOrCreateThread(ownerAuthUserId: string, counselorId: st
 
 export async function detachThread(threadId: string, ownerAuthUserId: string) {
   const supabase = createServiceClient();
-  const encrypted = encryptAnonymousMessage("The user can no longer be reached.");
 
   const { data: thread } = await supabase
     .from("anonymous_threads")
@@ -175,12 +185,39 @@ export async function detachThread(threadId: string, ownerAuthUserId: string) {
     throw new Error("Thread not found or not owned by this user");
   }
 
-  await supabase.from("anonymous_messages").insert({
-    thread_id: threadId,
-    sender: "student" as AnonymousSender,
-    body: encrypted,
-    counselor_id: thread.counselor_id,
-  });
+  const { error } = await supabase
+    .from("anonymous_threads")
+    .update({
+      owner_auth_user_id: null,
+      status: "detached" as ThreadStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", threadId);
+
+  if (error) throw error;
+
+  return { counselorId: thread.counselor_id as string };
+}
+
+export async function detachThreadByCounselor(threadId: string, counselorAuthUserId: string) {
+  const counselorId = await resolveCounselorIdByAuthUserId(counselorAuthUserId);
+  if (!counselorId) {
+    throw new Error("Counselor not found");
+  }
+
+  const supabase = createServiceClient();
+
+  const { data: thread } = await supabase
+    .from("anonymous_threads")
+    .select("id, owner_auth_user_id, counselor_id")
+    .eq("id", threadId)
+    .eq("counselor_id", counselorId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!thread) {
+    throw new Error("Thread not found or not assigned to this counselor");
+  }
 
   const { error } = await supabase
     .from("anonymous_threads")
@@ -192,6 +229,8 @@ export async function detachThread(threadId: string, ownerAuthUserId: string) {
     .eq("id", threadId);
 
   if (error) throw error;
+
+  return { ownerAuthUserId: thread.owner_auth_user_id as string | null };
 }
 
 export async function listStudentThreads(ownerAuthUserId: string): Promise<StudentAnonymousThreads> {
@@ -199,7 +238,7 @@ export async function listStudentThreads(ownerAuthUserId: string): Promise<Stude
 
   const { data, error } = await supabase
     .from("anonymous_threads")
-    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at, counselors(name)")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at, counselors(name, avatar_url)")
     .eq("owner_auth_user_id", ownerAuthUserId)
     .eq("status", "active")
     .gt("expires_at", new Date().toISOString())
@@ -209,14 +248,6 @@ export async function listStudentThreads(ownerAuthUserId: string): Promise<Stude
 
   const threads = (data ?? []) as ThreadRow[];
 
-  if (threads.length > 0) {
-    await supabase
-      .from("anonymous_threads")
-      .update({ last_seen_at: new Date().toISOString() })
-      .eq("owner_auth_user_id", ownerAuthUserId)
-      .eq("status", "active");
-  }
-
   const lastMessages = await listLastMessagesByThreadIds(threads.map((t) => t.id));
 
   const summaries: AnonymousThreadSummary[] = threads.map((thread) => {
@@ -225,6 +256,7 @@ export async function listStudentThreads(ownerAuthUserId: string): Promise<Stude
       id: thread.id,
       counselorId: thread.counselor_id,
       counselorName: getCounselorDisplayName(thread.counselors),
+      counselorAvatarUrl: getCounselorAvatarUrl(thread.counselors),
       anonymousLabel: getAnonymousLabel(thread.id),
       status: thread.status,
       createdAt: thread.created_at,
@@ -235,6 +267,15 @@ export async function listStudentThreads(ownerAuthUserId: string): Promise<Stude
   });
 
   return { threads: summaries };
+}
+
+export async function markStudentThreadsSeen(ownerAuthUserId: string) {
+  const supabase = createServiceClient();
+  await supabase
+    .from("anonymous_threads")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("owner_auth_user_id", ownerAuthUserId)
+    .eq("status", "active");
 }
 
 export async function addMessage(
@@ -306,6 +347,7 @@ export async function verifyStudentThreadAccessByOwner(threadId: string, ownerAu
 
   return {
     threadId: data.id,
+    isDetached: false,
     thread: {
       id: data.id,
       counselorId: data.counselor_id,
@@ -374,4 +416,62 @@ export async function listCounselorThreads(authUserId: string): Promise<Counselo
       lastMessageAt: lastMessage?.created_at,
     };
   });
+}
+
+export async function upsertAnonymousThreadNotification(params: {
+  recipientId: string;
+  recipientRole: "student" | "counselor";
+  threadId: string;
+  message: string;
+}) {
+  const supabase = createServiceClient();
+  const now = new Date().toISOString();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("notifications")
+    .select("notification_id")
+    .eq("recipient_id", params.recipientId)
+    .eq("recipient_role", params.recipientRole)
+    .eq("type", "session_notes")
+    .eq("anonymous_thread_id", params.threadId)
+    .eq("read", false)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Failed to query existing thread notification", existingError);
+    return;
+  }
+
+  if (existing?.notification_id) {
+    const { error: updateError } = await supabase
+      .from("notifications")
+      .update({
+        message: params.message,
+        sent_at: now,
+        read: false,
+      })
+      .eq("notification_id", existing.notification_id);
+
+    if (updateError) {
+      console.error("Failed to update grouped thread notification", updateError);
+    }
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("notifications").insert({
+    recipient_id: params.recipientId,
+    recipient_role: params.recipientRole,
+    type: "session_notes",
+    appointment_id: null,
+    anonymous_thread_id: params.threadId,
+    message: params.message,
+    sent_at: now,
+    read: false,
+  });
+
+  if (insertError) {
+    console.error("Failed to insert grouped thread notification", insertError);
+  }
 }

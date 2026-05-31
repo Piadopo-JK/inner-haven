@@ -6,6 +6,7 @@ export type AnonymousThreadSummary = {
   id: string;
   counselorId: string;
   counselorName: string;
+  counselorAvatarUrl?: string | null;
   anonymousLabel: string;
   status: ThreadStatus;
   createdAt: string;

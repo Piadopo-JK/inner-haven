@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import AnonymousChat from "@/components/anonymous/AnonymousChat";
 import AnonymousRequestForm from "@/components/anonymous/AnonymousRequestForm";
 import ThreadList from "@/components/anonymous/ThreadList";
+import { AnonymousCounselor } from "@/components/anonymous/types";
 import LoaderAnimations, { GentleWaveLoader } from "@/components/loading/BrandedLoaders";
 import { Button } from "@/components/ui/button";
 import { LOADING_MESSAGES } from "@/lib/loading/states";
+import { fetchJson } from "@/lib/query/http";
 import {
   useAnonymousIdentity,
   useAnonymousIdentityRealtimeSync,
@@ -24,8 +28,30 @@ export default function AnonymousMessagingHub({
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
   const [detachError, setDetachError] = useState("");
+  const [sidebarView, setSidebarView] = useState<"threads" | "pick-counselor" | "new-thread">("threads");
+  const [newThreadCounselorId, setNewThreadCounselorId] = useState<string | null>(null);
+  const [counselorSearch, setCounselorSearch] = useState("");
   const { data: studentThreads, isLoading: isChecking } = useAnonymousIdentity();
   const { mutateAsync: detachThread, isPending: isDetaching } = useDetachThread();
+
+  const { data: counselors = [], isLoading: isLoadingCounselors } = useQuery({
+    queryKey: ["anonymous", "counselors"],
+    queryFn: () =>
+      fetchJson<{ counselors: AnonymousCounselor[] }>("/api/anonymous/counselors").then(
+        (p) => p.counselors,
+      ),
+    staleTime: 5 * 60_000,
+  });
+
+  const filteredCounselors = useMemo(() => {
+    const q = counselorSearch.trim().toLowerCase();
+    if (!q) return counselors;
+    return counselors.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.specialization ?? "").toLowerCase().includes(q),
+    );
+  }, [counselors, counselorSearch]);
 
   useAnonymousIdentityRealtimeSync();
 
@@ -202,48 +228,181 @@ export default function AnonymousMessagingHub({
           className="flex h-full min-h-0 flex-col rounded-2xl border p-3"
           style={{
             borderColor: "var(--md-sys-color-outline-variant)",
-            background: "var(--md-sys-color-surface-container-low)",
+            background: "var(--md-sys-color-surface-container-high)",
           }}
         >
-          <div className="mb-3 flex items-center justify-between">
-            <h2
-              className="text-sm font-semibold"
-              style={{ color: "var(--md-sys-color-on-surface)" }}
-            >
-              Conversations
-            </h2>
-          </div>
-          <ThreadList
-            threads={threads}
-            selectedThreadId={selectedThreadId}
-            onSelect={setSelectedThreadId}
-          />
+          {sidebarView === "pick-counselor" ? (
+            <>
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarView("threads");
+                    setCounselorSearch("");
+                  }}
+                  className="rounded-full p-1"
+                  style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+                  aria-label="Back to conversations"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  New conversation
+                </h2>
+              </div>
+
+              <label
+                className="mb-2 flex shrink-0 items-center gap-2 rounded-full border px-3 py-2"
+                style={{
+                  borderColor: "var(--md-sys-color-outline-variant)",
+                  background: "var(--md-sys-color-surface-container-low)",
+                  color: "var(--md-sys-color-on-surface-variant)",
+                }}
+              >
+                <Search className="h-4 w-4 shrink-0" />
+                <input
+                  value={counselorSearch}
+                  onChange={(e) => setCounselorSearch(e.target.value)}
+                  placeholder="Search counselors"
+                  className="w-full bg-transparent text-sm outline-none"
+                />
+              </label>
+
+              <div className="min-h-0 overflow-y-auto">
+                {isLoadingCounselors ? (
+                  <GentleWaveLoader
+                    message="Loading counselors…"
+                    className="flex min-h-[120px] items-center justify-center"
+                  />
+                ) : filteredCounselors.length === 0 ? (
+                  <p className="px-1 py-4 text-sm" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                    No counselors found.
+                  </p>
+                ) : (
+                  filteredCounselors.map((c) => {
+                    const existingThread = threads.find((t) => t.counselorId === c.counselorId);
+
+                    return (
+                    <button
+                      key={c.counselorId}
+                      type="button"
+                      onClick={() => {
+                        if (existingThread) {
+                          setSelectedThreadId(existingThread.id);
+                          setSidebarView("threads");
+                          setShowDetachConfirm(true);
+                        } else {
+                          setNewThreadCounselorId(c.counselorId);
+                          setSidebarView("new-thread");
+                        }
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_8%,transparent)]"
+                    >
+                      {c.avatarUrl ? (
+                        <img
+                          src={c.avatarUrl}
+                          alt={c.name}
+                          className="h-10 w-10 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                          style={{
+                            background: "var(--md-sys-color-secondary-container)",
+                            color: "var(--md-sys-color-on-secondary-container)",
+                          }}
+                        >
+                          {c.name.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                          {c.name}
+                        </p>
+                        {existingThread ? (
+                          <p className="truncate text-xs" style={{ color: "var(--md-sys-color-primary)" }}>
+                            Active conversation — tap to start new
+                          </p>
+                        ) : c.specialization ? (
+                          <p className="truncate text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                            {c.specialization}
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          ) : sidebarView === "new-thread" && newThreadCounselorId ? (
+            <>
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarView("pick-counselor");
+                    setNewThreadCounselorId(null);
+                  }}
+                  className="rounded-full p-1"
+                  style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+                  aria-label="Back to counselor list"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  New message
+                </h2>
+              </div>
+              <AnonymousRequestForm
+                counselorId={newThreadCounselorId}
+                onCreated={() => {
+                  setSidebarView("threads");
+                  setNewThreadCounselorId(null);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  Conversations
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setSidebarView("pick-counselor")}
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_10%,transparent)]"
+                  style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+                  aria-label="New conversation"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              </div>
+              <ThreadList
+                threads={threads}
+                selectedThreadId={selectedThreadId}
+                onSelect={setSelectedThreadId}
+              />
+            </>
+          )}
         </aside>
 
-        <div
-          className="min-h-0 rounded-2xl border"
-          style={{
-            borderColor: "var(--md-sys-color-outline-variant)",
-            background: "var(--md-sys-color-surface-container-low)",
-          }}
-        >
+        <div className="min-h-0">
           {selectedThread ? (
             <AnonymousChat
               thread={selectedThread}
               sender="student"
-              onNewConversation={
-                activeThreadWithCounselor
-                  ? () => {
-                      setSelectedThreadId(activeThreadWithCounselor.id);
-                      setShowDetachConfirm(true);
-                    }
-                  : undefined
-              }
+              onNewConversation={() => setShowDetachConfirm(true)}
+              onRemove={() => setShowDetachConfirm(true)}
             />
           ) : (
             <div
-              className="flex min-h-[240px] items-center justify-center p-6 text-sm"
-              style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+              className="flex min-h-[240px] items-center justify-center rounded-2xl border p-6 text-sm"
+              style={{
+                borderColor: "var(--md-sys-color-outline-variant)",
+                background: "var(--md-sys-color-surface-container-low)",
+                color: "var(--md-sys-color-on-surface-variant)",
+              }}
             >
               Select a conversation to continue.
             </div>
@@ -258,13 +417,8 @@ export default function AnonymousMessagingHub({
               thread={selectedThread}
               sender="student"
               onBack={() => setSelectedThreadId(undefined)}
-              onNewConversation={
-                activeThreadWithCounselor
-                  ? () => {
-                      setShowDetachConfirm(true);
-                    }
-                  : undefined
-              }
+              onNewConversation={() => setShowDetachConfirm(true)}
+              onRemove={() => setShowDetachConfirm(true)}
             />
           </div>
         ) : (
@@ -272,12 +426,22 @@ export default function AnonymousMessagingHub({
             className="flex h-full w-full min-h-0 flex-col rounded-2xl border p-3"
             style={{
               borderColor: "var(--md-sys-color-outline-variant)",
-              background: "var(--md-sys-color-surface-container-low)",
+              background: "var(--md-sys-color-surface-container-high)",
             }}
           >
-            <h2 className="mb-3 text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-              Conversations
-            </h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                Conversations
+              </h2>
+              <a
+                href="/counselors"
+                className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_10%,transparent)]"
+                style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+                aria-label="New conversation"
+              >
+                <Plus className="h-5 w-5" />
+              </a>
+            </div>
             <ThreadList
               threads={threads}
               selectedThreadId={selectedThreadId}
