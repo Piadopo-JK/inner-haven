@@ -1,84 +1,27 @@
 import {
   addMessage,
+  detachThread,
+  detachThreadByCounselor,
   getAnonymousThreadById,
   getOrCreateThread,
-  resolveIdentityOwnerAuthUserIdByThreadId,
   resolveStudentIdByAuthUserId,
+  resolveThreadOwnerAuthUserId,
+  upsertAnonymousThreadNotification,
 } from "@/lib/anonymous/repository";
-import { createServiceClient } from "@/lib/supabase/server";
-
-async function upsertAnonymousThreadNotification(params: {
-  recipientId: string;
-  recipientRole: "student" | "counselor";
-  threadId: string;
-  message: string;
-}) {
-  const supabase = createServiceClient();
-  const now = new Date().toISOString();
-
-  const { data: existing, error: existingError } = await supabase
-    .from("notifications")
-    .select("notification_id")
-    .eq("recipient_id", params.recipientId)
-    .eq("recipient_role", params.recipientRole)
-    .eq("type", "session_notes")
-    .eq("anonymous_thread_id", params.threadId)
-    .eq("read", false)
-    .order("sent_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existingError) {
-    console.error("Failed to query existing thread notification", existingError);
-    return;
-  }
-
-  if (existing?.notification_id) {
-    const { error: updateError } = await supabase
-      .from("notifications")
-      .update({
-        message: params.message,
-        sent_at: now,
-        read: false,
-      })
-      .eq("notification_id", existing.notification_id);
-
-    if (updateError) {
-      console.error("Failed to update grouped thread notification", updateError);
-    }
-    return;
-  }
-
-  const { error: insertError } = await supabase.from("notifications").insert({
-    recipient_id: params.recipientId,
-    recipient_role: params.recipientRole,
-    type: "session_notes",
-    appointment_id: null,
-    anonymous_thread_id: params.threadId,
-    message: params.message,
-    sent_at: now,
-    read: false,
-  });
-
-  if (insertError) {
-    console.error("Failed to insert grouped thread notification", insertError);
-  }
-}
 
 export async function createThreadWithFirstMessage(
-  identityId: string,
+  ownerAuthUserId: string,
   counselorId: string,
   message: string,
 ): Promise<{ threadId: string }> {
-  const thread = await getOrCreateThread(identityId, counselorId);
+  const thread = await getOrCreateThread(ownerAuthUserId, counselorId);
   await addMessage(thread.id, "student", message);
 
-  const preview = message.slice(0, 120);
   await upsertAnonymousThreadNotification({
     recipientId: counselorId,
     recipientRole: "counselor",
     threadId: thread.id,
-    message: `New pseudonymous thread message: ${preview}`,
+    message: "You have a new message",
   });
 
   return { threadId: thread.id };
@@ -89,12 +32,11 @@ export async function sendStudentMessage(threadId: string, message: string): Pro
 
   const thread = await getAnonymousThreadById(threadId);
   if (thread) {
-    const preview = message.slice(0, 120);
     await upsertAnonymousThreadNotification({
       recipientId: thread.counselor_id,
       recipientRole: "counselor",
       threadId,
-      message: `New pseudonymous thread message: ${preview}`,
+      message: "You have a new message",
     });
   }
 }
@@ -106,7 +48,7 @@ export async function sendCounselorMessage(
 ): Promise<void> {
   await addMessage(threadId, "counselor", message, counselorId);
 
-  const ownerAuthUserId = await resolveIdentityOwnerAuthUserIdByThreadId(threadId);
+  const ownerAuthUserId = await resolveThreadOwnerAuthUserId(threadId);
   const studentId = ownerAuthUserId ? await resolveStudentIdByAuthUserId(ownerAuthUserId) : null;
   if (studentId) {
     await upsertAnonymousThreadNotification({
@@ -115,5 +57,42 @@ export async function sendCounselorMessage(
       threadId,
       message: "You have a new message",
     });
+  }
+}
+
+export async function detachThreadForStudent(
+  threadId: string,
+  ownerAuthUserId: string,
+): Promise<void> {
+  const { counselorId } = await detachThread(threadId, ownerAuthUserId);
+
+  await addMessage(threadId, "student", "The user can no longer be reached.");
+
+  await upsertAnonymousThreadNotification({
+    recipientId: counselorId,
+    recipientRole: "counselor",
+    threadId,
+    message: "A student has closed their anonymous conversation.",
+  });
+}
+
+export async function detachThreadForCounselor(
+  threadId: string,
+  counselorAuthUserId: string,
+): Promise<void> {
+  const { ownerAuthUserId } = await detachThreadByCounselor(threadId, counselorAuthUserId);
+
+  await addMessage(threadId, "counselor", "This conversation has been closed by the counselor.");
+
+  if (ownerAuthUserId) {
+    const studentId = await resolveStudentIdByAuthUserId(ownerAuthUserId);
+    if (studentId) {
+      await upsertAnonymousThreadNotification({
+        recipientId: studentId,
+        recipientRole: "student",
+        threadId,
+        message: "A counselor has closed your anonymous conversation.",
+      });
+    }
   }
 }

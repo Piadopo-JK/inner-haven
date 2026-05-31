@@ -105,10 +105,10 @@ describe("Feature 5: Anonymous Help Request", () => {
       (repo.getOrCreateThread as jest.Mock).mockResolvedValue({ id: "thread-1" });
       (repo.addMessage as jest.Mock).mockResolvedValue(undefined);
 
-      const result = await createThreadWithFirstMessage("identity-1", "cou-1", "I need help");
+      const result = await createThreadWithFirstMessage("auth-user-1", "cou-1", "I need help");
 
       expect(result).toEqual({ threadId: "thread-1" });
-      expect(repo.getOrCreateThread).toHaveBeenCalledWith("identity-1", "cou-1");
+      expect(repo.getOrCreateThread).toHaveBeenCalledWith("auth-user-1", "cou-1");
       expect(repo.addMessage).toHaveBeenCalledWith("thread-1", "student", "I need help");
     });
 
@@ -117,7 +117,7 @@ describe("Feature 5: Anonymous Help Request", () => {
       (repo.addMessage as jest.Mock).mockResolvedValue(undefined);
 
       const longMsg = "a".repeat(500);
-      await createThreadWithFirstMessage("identity-1", "cou-1", longMsg);
+      await createThreadWithFirstMessage("auth-user-1", "cou-1", longMsg);
 
       expect(repo.addMessage).toHaveBeenCalledWith("thread-1", "student", longMsg);
     });
@@ -126,7 +126,7 @@ describe("Feature 5: Anonymous Help Request", () => {
       (repo.getOrCreateThread as jest.Mock).mockRejectedValue(new Error("DB connection failed"));
 
       await expect(
-        createThreadWithFirstMessage("identity-1", "cou-1", "help"),
+        createThreadWithFirstMessage("auth-user-1", "cou-1", "help"),
       ).rejects.toThrow("DB connection failed");
     });
   });
@@ -158,29 +158,29 @@ describe("Feature 5: Anonymous Help Request", () => {
   describe("sendCounselorMessage", () => {
     it("adds message and resolves student for notification", async () => {
       (repo.addMessage as jest.Mock).mockResolvedValue(undefined);
-      (repo.resolveIdentityOwnerAuthUserIdByThreadId as jest.Mock).mockResolvedValue("auth-user-1");
+      (repo.resolveThreadOwnerAuthUserId as jest.Mock).mockResolvedValue("auth-user-1");
       (repo.resolveStudentIdByAuthUserId as jest.Mock).mockResolvedValue("stu-1");
 
       await sendCounselorMessage("thread-1", "Response from counselor", "cou-1");
 
       expect(repo.addMessage).toHaveBeenCalledWith("thread-1", "counselor", "Response from counselor", "cou-1");
-      expect(repo.resolveIdentityOwnerAuthUserIdByThreadId).toHaveBeenCalledWith("thread-1");
+      expect(repo.resolveThreadOwnerAuthUserId).toHaveBeenCalledWith("thread-1");
     });
 
     it("resolves student and triggers notification when student is found", async () => {
       (repo.addMessage as jest.Mock).mockResolvedValue(undefined);
-      (repo.resolveIdentityOwnerAuthUserIdByThreadId as jest.Mock).mockResolvedValue("auth-user-1");
+      (repo.resolveThreadOwnerAuthUserId as jest.Mock).mockResolvedValue("auth-user-1");
       (repo.resolveStudentIdByAuthUserId as jest.Mock).mockResolvedValue("stu-resolved");
 
       await sendCounselorMessage("thread-1", "Response", "cou-1");
 
-      expect(repo.resolveIdentityOwnerAuthUserIdByThreadId).toHaveBeenCalledWith("thread-1");
+      expect(repo.resolveThreadOwnerAuthUserId).toHaveBeenCalledWith("thread-1");
       expect(repo.resolveStudentIdByAuthUserId).toHaveBeenCalledWith("auth-user-1");
     });
 
     it("handles case where student cannot be resolved", async () => {
       (repo.addMessage as jest.Mock).mockResolvedValue(undefined);
-      (repo.resolveIdentityOwnerAuthUserIdByThreadId as jest.Mock).mockResolvedValue(null);
+      (repo.resolveThreadOwnerAuthUserId as jest.Mock).mockResolvedValue(null);
 
       await expect(
         sendCounselorMessage("thread-1", "Response", "cou-1"),

@@ -1,34 +1,29 @@
 import { PostgrestError } from "@supabase/supabase-js";
-import { createHash, randomBytes } from "crypto";
 
 import { decryptAnonymousMessage, encryptAnonymousMessage } from "@/lib/anonymous/crypto";
 import {
   AnonymousThreadMessage,
   AnonymousThreadSummary,
   AnonymousSender,
-  VerifiedAnonymousIdentity,
+  StudentAnonymousThreads,
+  CounselorAnonymousThreadSummary,
+  ThreadStatus,
 } from "@/lib/anonymous/types";
 import { createServiceClient } from "@/lib/supabase/server";
 
-const IDENTITY_TTL_DAYS = 7;
+const THREAD_TTL_DAYS = 7;
 const UNIQUE_VIOLATION = "23505";
-
-type IdentityRow = {
-  id: string;
-  token_hash: string;
-  owner_auth_user_id: string;
-  expires_at: string;
-  created_at: string;
-  last_seen_at: string | null;
-};
 
 type ThreadRow = {
   id: string;
-  anonymous_identity_id: string;
   counselor_id: string;
+  owner_auth_user_id: string | null;
+  status: ThreadStatus;
+  expires_at: string;
+  last_seen_at: string | null;
   created_at: string;
   updated_at: string;
-  counselors?: Array<{ name: string | null }> | { name: string | null } | null;
+  counselors?: Array<{ name: string | null; avatar_url?: string | null }> | { name: string | null; avatar_url?: string | null } | null;
 };
 
 type MessageRow = {
@@ -43,14 +38,15 @@ function isUniqueViolation(error: PostgrestError | null) {
   return error?.code === UNIQUE_VIOLATION;
 }
 
-function getAnonymousLabel(identityId: string) {
-  return `ANON-${identityId.slice(0, 4).toUpperCase()}`;
+function getAnonymousLabel(threadId: string) {
+  return `ANON-${threadId.slice(0, 4).toUpperCase()}`;
 }
 
 function safeDecrypt(value: string) {
   try {
     return decryptAnonymousMessage(value);
-  } catch {
+  } catch (err) {
+    console.error("Failed to decrypt anonymous message", err);
     return "[Message unavailable]";
   }
 }
@@ -63,6 +59,20 @@ function getCounselorDisplayName(counselors: ThreadRow["counselors"]) {
     return counselors.name ?? "Counselor";
   }
   return "Counselor";
+}
+
+function getCounselorAvatarUrl(counselors: ThreadRow["counselors"]) {
+  if (Array.isArray(counselors)) {
+    return counselors[0]?.avatar_url ?? null;
+  }
+  if (counselors && typeof counselors === "object") {
+    return counselors.avatar_url ?? null;
+  }
+  return null;
+}
+
+function isExpired(expiresAt: string) {
+  return new Date(expiresAt).getTime() <= Date.now();
 }
 
 export async function resolveCounselorIdByAuthUserId(authUserId: string) {
@@ -87,112 +97,6 @@ export async function resolveStudentIdByAuthUserId(authUserId: string) {
   return (data?.student_id as string | undefined) ?? null;
 }
 
-async function createIdentity(ownerAuthUserId: string) {
-  const supabase = createServiceClient();
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const tokenHash = createHash("sha256").update(randomBytes(32)).digest("hex");
-    const expiresAt = new Date(Date.now() + IDENTITY_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
-    const { data, error } = await supabase
-      .from("anonymous_identities")
-      .insert({
-        token_hash: tokenHash,
-        owner_auth_user_id: ownerAuthUserId,
-        expires_at: expiresAt,
-      })
-      .select("id, token_hash, owner_auth_user_id, expires_at, created_at, last_seen_at")
-      .single();
-
-    if (!error && data) {
-      return { identity: data as IdentityRow };
-    }
-
-    if (!isUniqueViolation(error)) {
-      throw error;
-    }
-  }
-
-  throw new Error("Unable to generate unique token");
-}
-
-export async function getOrCreateThread(identityId: string, counselorId: string) {
-  const supabase = createServiceClient();
-
-  const { data: existing } = await supabase
-    .from("anonymous_threads")
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at")
-    .eq("anonymous_identity_id", identityId)
-    .eq("counselor_id", counselorId)
-    .maybeSingle();
-
-  if (existing) {
-    return existing as ThreadRow;
-  }
-
-  const { data, error } = await supabase
-    .from("anonymous_threads")
-    .insert({ anonymous_identity_id: identityId, counselor_id: counselorId })
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at")
-    .single();
-
-  if (error && !isUniqueViolation(error)) {
-    throw error;
-  }
-
-  if (!error && data) {
-    return data as ThreadRow;
-  }
-
-  const { data: retried, error: retriedError } = await supabase
-    .from("anonymous_threads")
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at")
-    .eq("anonymous_identity_id", identityId)
-    .eq("counselor_id", counselorId)
-    .single();
-
-  if (retriedError) {
-    throw retriedError;
-  }
-
-  return retried as ThreadRow;
-}
-
-export async function createAnonymousIdentity(ownerAuthUserId: string) {
-  const { identity } = await createIdentity(ownerAuthUserId);
-  return {
-    identityId: identity.id,
-    expiresAt: identity.expires_at,
-  };
-}
-
-async function getLatestActiveIdentityByOwner(ownerAuthUserId: string) {
-  const supabase = createServiceClient();
-
-  const { data } = await supabase
-    .from("anonymous_identities")
-    .select("id, token_hash, owner_auth_user_id, expires_at, created_at, last_seen_at")
-    .eq("owner_auth_user_id", ownerAuthUserId)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return (data as IdentityRow | null) ?? null;
-}
-
-function isExpired(expiresAt: string) {
-  return new Date(expiresAt).getTime() <= Date.now();
-}
-
-async function touchIdentity(identityId: string) {
-  const supabase = createServiceClient();
-  await supabase
-    .from("anonymous_identities")
-    .update({ last_seen_at: new Date().toISOString() })
-    .eq("id", identityId);
-}
-
 async function listLastMessagesByThreadIds(threadIds: string[]) {
   if (threadIds.length === 0) return new Map<string, MessageRow>();
 
@@ -214,37 +118,147 @@ async function listLastMessagesByThreadIds(threadIds: string[]) {
   return map;
 }
 
-async function listThreads(identityId: string): Promise<ThreadRow[]> {
+export async function createThread(ownerAuthUserId: string, counselorId: string) {
   const supabase = createServiceClient();
+  const expiresAt = new Date(Date.now() + THREAD_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
   const { data, error } = await supabase
     .from("anonymous_threads")
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at, counselors(name)")
-    .eq("anonymous_identity_id", identityId)
+    .insert({
+      owner_auth_user_id: ownerAuthUserId,
+      counselor_id: counselorId,
+      status: "active" as ThreadStatus,
+      expires_at: expiresAt,
+    })
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return data as ThreadRow;
+}
+
+export async function getOrCreateThread(ownerAuthUserId: string, counselorId: string) {
+  const supabase = createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("anonymous_threads")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
+    .eq("owner_auth_user_id", ownerAuthUserId)
+    .eq("counselor_id", counselorId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (existing && !isExpired(existing.expires_at)) {
+    return existing as ThreadRow;
+  }
+
+  try {
+    return await createThread(ownerAuthUserId, counselorId);
+  } catch (err) {
+    if (isUniqueViolation(err as PostgrestError)) {
+      const { data: retried } = await supabase
+        .from("anonymous_threads")
+        .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
+        .eq("owner_auth_user_id", ownerAuthUserId)
+        .eq("counselor_id", counselorId)
+        .eq("status", "active")
+        .single();
+
+      return retried as ThreadRow;
+    }
+    throw err;
+  }
+}
+
+export async function detachThread(threadId: string, ownerAuthUserId: string) {
+  const supabase = createServiceClient();
+
+  const { data: thread } = await supabase
+    .from("anonymous_threads")
+    .select("id, owner_auth_user_id, counselor_id")
+    .eq("id", threadId)
+    .eq("owner_auth_user_id", ownerAuthUserId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!thread) {
+    throw new Error("Thread not found or not owned by this user");
+  }
+
+  const { error } = await supabase
+    .from("anonymous_threads")
+    .update({
+      owner_auth_user_id: null,
+      status: "detached" as ThreadStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", threadId);
+
+  if (error) throw error;
+
+  return { counselorId: thread.counselor_id as string };
+}
+
+export async function detachThreadByCounselor(threadId: string, counselorAuthUserId: string) {
+  const counselorId = await resolveCounselorIdByAuthUserId(counselorAuthUserId);
+  if (!counselorId) {
+    throw new Error("Counselor not found");
+  }
+
+  const supabase = createServiceClient();
+
+  const { data: thread } = await supabase
+    .from("anonymous_threads")
+    .select("id, owner_auth_user_id, counselor_id")
+    .eq("id", threadId)
+    .eq("counselor_id", counselorId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!thread) {
+    throw new Error("Thread not found or not assigned to this counselor");
+  }
+
+  const { error } = await supabase
+    .from("anonymous_threads")
+    .update({
+      owner_auth_user_id: null,
+      status: "detached" as ThreadStatus,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", threadId);
+
+  if (error) throw error;
+
+  return { ownerAuthUserId: thread.owner_auth_user_id as string | null };
+}
+
+export async function listStudentThreads(ownerAuthUserId: string): Promise<StudentAnonymousThreads> {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from("anonymous_threads")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at, counselors(name, avatar_url)")
+    .eq("owner_auth_user_id", ownerAuthUserId)
+    .eq("status", "active")
+    .gt("expires_at", new Date().toISOString())
     .order("updated_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as ThreadRow[];
-}
 
-export async function verifyIdentityByOwner(ownerAuthUserId: string): Promise<VerifiedAnonymousIdentity | null> {
-  const identity = await getLatestActiveIdentityByOwner(ownerAuthUserId);
-  if (!identity || isExpired(identity.expires_at)) {
-    return null;
-  }
+  const threads = (data ?? []) as ThreadRow[];
 
-  await touchIdentity(identity.id);
-
-  const threads = await listThreads(identity.id);
-  const lastMessages = await listLastMessagesByThreadIds(threads.map((thread) => thread.id));
+  const lastMessages = await listLastMessagesByThreadIds(threads.map((t) => t.id));
 
   const summaries: AnonymousThreadSummary[] = threads.map((thread) => {
     const lastMessage = lastMessages.get(thread.id);
-
     return {
       id: thread.id,
       counselorId: thread.counselor_id,
       counselorName: getCounselorDisplayName(thread.counselors),
-      anonymousLabel: getAnonymousLabel(identity.id),
+      counselorAvatarUrl: getCounselorAvatarUrl(thread.counselors),
+      anonymousLabel: getAnonymousLabel(thread.id),
+      status: thread.status,
       createdAt: thread.created_at,
       updatedAt: thread.updated_at,
       lastMessagePreview: lastMessage ? safeDecrypt(lastMessage.body).slice(0, 80) : undefined,
@@ -252,11 +266,16 @@ export async function verifyIdentityByOwner(ownerAuthUserId: string): Promise<Ve
     };
   });
 
-  return {
-    identityId: identity.id,
-    expiresAt: identity.expires_at,
-    threads: summaries,
-  };
+  return { threads: summaries };
+}
+
+export async function markStudentThreadsSeen(ownerAuthUserId: string) {
+  const supabase = createServiceClient();
+  await supabase
+    .from("anonymous_threads")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("owner_auth_user_id", ownerAuthUserId)
+    .eq("status", "active");
 }
 
 export async function addMessage(
@@ -303,40 +322,38 @@ export async function listMessages(threadId: string): Promise<AnonymousThreadMes
   }));
 }
 
-export async function verifyStudentThreadAccessByOwner(threadId: string, ownerAuthUserId: string) {
-  const identity = await verifyIdentityByOwner(ownerAuthUserId);
-  if (!identity) return null;
-
-  const match = identity.threads.find((thread) => thread.id === threadId);
-  if (!match) return null;
-
-  return {
-    identity,
-    thread: match,
-  };
-}
-
 export async function getAnonymousThreadById(threadId: string) {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("anonymous_threads")
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
     .eq("id", threadId)
     .maybeSingle();
 
   return (data as ThreadRow | null) ?? null;
 }
 
-export async function resolveIdentityOwnerAuthUserIdByThreadId(threadId: string) {
+export async function verifyStudentThreadAccessByOwner(threadId: string, ownerAuthUserId: string) {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("anonymous_threads")
-    .select("anonymous_identities(owner_auth_user_id)")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
     .eq("id", threadId)
+    .eq("owner_auth_user_id", ownerAuthUserId)
+    .eq("status", "active")
     .maybeSingle();
 
-  const relation = data?.anonymous_identities as { owner_auth_user_id?: string | null } | null | undefined;
-  return relation?.owner_auth_user_id ?? null;
+  if (!data) return null;
+
+  return {
+    threadId: data.id,
+    isDetached: false,
+    thread: {
+      id: data.id,
+      counselorId: data.counselor_id,
+      anonymousLabel: getAnonymousLabel(data.id),
+    },
+  };
 }
 
 export async function verifyCounselorThreadAccess(threadId: string, authUserId: string) {
@@ -346,7 +363,7 @@ export async function verifyCounselorThreadAccess(threadId: string, authUserId: 
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("anonymous_threads")
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
     .eq("id", threadId)
     .eq("counselor_id", counselorId)
     .maybeSingle();
@@ -356,34 +373,105 @@ export async function verifyCounselorThreadAccess(threadId: string, authUserId: 
   return {
     counselorId,
     thread: data as ThreadRow,
+    isDetached: data.status === "detached",
   };
 }
 
-export async function listCounselorThreads(authUserId: string) {
+export async function resolveThreadOwnerAuthUserId(threadId: string) {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("anonymous_threads")
+    .select("owner_auth_user_id")
+    .eq("id", threadId)
+    .maybeSingle();
+
+  return (data?.owner_auth_user_id as string | null) ?? null;
+}
+
+export async function listCounselorThreads(authUserId: string): Promise<CounselorAnonymousThreadSummary[]> {
   const counselorId = await resolveCounselorIdByAuthUserId(authUserId);
   if (!counselorId) return [];
 
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("anonymous_threads")
-    .select("id, anonymous_identity_id, counselor_id, created_at, updated_at")
+    .select("id, counselor_id, owner_auth_user_id, status, expires_at, last_seen_at, created_at, updated_at")
     .eq("counselor_id", counselorId)
     .order("updated_at", { ascending: false });
 
   if (error) throw error;
 
   const threads = (data ?? []) as ThreadRow[];
-  const lastMessages = await listLastMessagesByThreadIds(threads.map((thread) => thread.id));
+  const lastMessages = await listLastMessagesByThreadIds(threads.map((t) => t.id));
 
   return threads.map((thread) => {
     const lastMessage = lastMessages.get(thread.id);
     return {
       id: thread.id,
-      anonymousLabel: getAnonymousLabel(thread.anonymous_identity_id),
+      anonymousLabel: getAnonymousLabel(thread.id),
+      status: thread.status,
       createdAt: thread.created_at,
       updatedAt: thread.updated_at,
       lastMessagePreview: lastMessage ? safeDecrypt(lastMessage.body).slice(0, 80) : undefined,
       lastMessageAt: lastMessage?.created_at,
     };
   });
+}
+
+export async function upsertAnonymousThreadNotification(params: {
+  recipientId: string;
+  recipientRole: "student" | "counselor";
+  threadId: string;
+  message: string;
+}) {
+  const supabase = createServiceClient();
+  const now = new Date().toISOString();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("notifications")
+    .select("notification_id")
+    .eq("recipient_id", params.recipientId)
+    .eq("recipient_role", params.recipientRole)
+    .eq("type", "session_notes")
+    .eq("anonymous_thread_id", params.threadId)
+    .eq("read", false)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Failed to query existing thread notification", existingError);
+    return;
+  }
+
+  if (existing?.notification_id) {
+    const { error: updateError } = await supabase
+      .from("notifications")
+      .update({
+        message: params.message,
+        sent_at: now,
+        read: false,
+      })
+      .eq("notification_id", existing.notification_id);
+
+    if (updateError) {
+      console.error("Failed to update grouped thread notification", updateError);
+    }
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("notifications").insert({
+    recipient_id: params.recipientId,
+    recipient_role: params.recipientRole,
+    type: "session_notes",
+    appointment_id: null,
+    anonymous_thread_id: params.threadId,
+    message: params.message,
+    sent_at: now,
+    read: false,
+  });
+
+  if (insertError) {
+    console.error("Failed to insert grouped thread notification", insertError);
+  }
 }

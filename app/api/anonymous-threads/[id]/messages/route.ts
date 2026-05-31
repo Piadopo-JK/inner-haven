@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       }
 
       const messages = await listMessages(threadId);
-      return NextResponse.json({ messages });
+      return NextResponse.json({ messages, isDetached: access.isDetached });
     }
 
     const access = await verifyStudentThreadAccessByOwner(threadId, sessionUser.userId);
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const messages = await listMessages(threadId);
-    return NextResponse.json({ thread: access.thread, messages });
+    return NextResponse.json({ messages });
   }
 
   if (!payload.message || payload.message.trim().length < 1 || payload.message.length > 2000) {

@@ -2,7 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import type {
   AnonymousThreadMessage,
   AnonymousThreadSummary,
-  VerifiedAnonymousIdentity,
+  StudentAnonymousThreads,
+  CounselorAnonymousThreadSummary,
 } from "@/lib/anonymous/types";
 import { fetchJson, readJsonResponse } from "@/lib/query/http";
 
@@ -194,9 +195,9 @@ export async function fetchAnonymousIdentity() {
     return null;
   }
 
-  return readJsonResponse<VerifiedAnonymousIdentity>(
+  return readJsonResponse<StudentAnonymousThreads>(
     response,
-    "Unable to verify anonymous identity.",
+    "Unable to load anonymous threads.",
   );
 }
 
@@ -210,7 +211,7 @@ export function anonymousIdentityQueryOptions() {
 
 export async function fetchAnonymousCounselorThreads() {
   const payload = await fetchJson<{
-    threads?: AnonymousThreadSummary[];
+    threads?: CounselorAnonymousThreadSummary[];
   }>("/api/counselor/anonymous-threads");
 
   return payload.threads ?? [];

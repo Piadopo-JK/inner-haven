@@ -270,9 +270,14 @@
 .anonymous-hub-bg {
   background:
     radial-gradient(
-      circle at 10% 10%,
-      color-mix(in srgb, var(--md-sys-color-primary-container) 25%, transparent),
-      transparent 55%
+      ellipse at 0% 0%,
+      color-mix(in srgb, var(--md-sys-color-primary-container) 30%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse at 100% 100%,
+      color-mix(in srgb, var(--md-sys-color-secondary-container) 15%, transparent),
+      transparent 70%
     ),
     var(--md-sys-color-surface);
 }
