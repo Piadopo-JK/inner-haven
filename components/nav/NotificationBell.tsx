@@ -52,7 +52,6 @@ export default function NotificationBell({
     },
     initialData: notifications,
     staleTime: 30_000,
-    refetchOnMount: true,
   });
 
   useEffect(() => {
