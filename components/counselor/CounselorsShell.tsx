@@ -1,12 +1,13 @@
-function PulseBlock({ className }: { className: string }) {
-  return (
-    <div
-      className={`animate-pulse rounded-2xl bg-[var(--md-sys-color-surface-container-high)] ${className}`}
-    />
-  );
-}
+"use client";
 
-export default function CounselorsLoading() {
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+import { useAuthGuard } from "@/lib/query/hooks/useAuthGuard";
+import { PulseBlock } from "@/components/dashboard/DashboardRouteSkeletons";
+import CounselorsContent from "@/components/counselor/CounselorsContent";
+
+function CounselorsSkeleton() {
   return (
     <main
       className="min-h-screen w-full px-4 py-8"
@@ -25,7 +26,8 @@ export default function CounselorsLoading() {
           <PulseBlock className="h-4 w-3/4 max-w-md" />
         </section>
 
-        <div className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-3"
+        <div
+          className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-3"
           style={{
             borderColor: "var(--md-sys-color-outline-variant)",
             background: "var(--md-sys-color-surface-container-low)",
@@ -48,16 +50,16 @@ export default function CounselorsLoading() {
             >
               <div className="flex items-center gap-4">
                 <PulseBlock className="h-14 w-14 rounded-full" />
-                <div className="flex-1 space-y-2">
+                <div className="space-y-2 flex-1">
                   <PulseBlock className="h-5 w-32" />
-                  <PulseBlock className="h-3 w-24" />
+                  <PulseBlock className="h-4 w-24" />
                 </div>
               </div>
               <PulseBlock className="h-4 w-full" />
-              <PulseBlock className="h-4 w-2/3" />
-              <div className="flex gap-3 pt-2">
-                <PulseBlock className="h-10 flex-1 rounded-full" />
-                <PulseBlock className="h-10 flex-1 rounded-full" />
+              <PulseBlock className="h-4 w-3/4" />
+              <div className="flex gap-2 mt-2">
+                <PulseBlock className="h-9 w-24 rounded-xl" />
+                <PulseBlock className="h-9 w-24 rounded-xl" />
               </div>
             </div>
           ))}
@@ -65,4 +67,26 @@ export default function CounselorsLoading() {
       </div>
     </main>
   );
+}
+
+export default function CounselorsShell() {
+  const router = useRouter();
+  const guard = useAuthGuard();
+
+  useEffect(() => {
+    if (guard.status === "authenticated" && guard.me.role !== "student") {
+      router.replace("/dashboard");
+    }
+  }, [guard, router]);
+
+  if (guard.status === "loading" || guard.status === "unauthenticated") {
+    return <CounselorsSkeleton />;
+  }
+
+  if (guard.status === "onboarding") return null;
+
+  // Student-only page — redirect handled by useEffect above
+  if (guard.me.role !== "student") return null;
+
+  return <CounselorsContent />;
 }
