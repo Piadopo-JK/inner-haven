@@ -104,6 +104,7 @@ export function useAppointments<TData = AppointmentDTO[]>(
     queryKey: baseOptions.queryKey,
     queryFn: baseOptions.queryFn,
     staleTime: baseOptions.staleTime,
+    placeholderData: (previousData) => previousData,
     // SSR data seeds the cache on first render; background refetch happens
     // because staleTime means it's already stale at the point of hydration.
     ...(initialData !== undefined ? { initialData } : {}),
