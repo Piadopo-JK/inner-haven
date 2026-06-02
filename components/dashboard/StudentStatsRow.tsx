@@ -41,6 +41,7 @@ function StatCard({ label, value, sublabel }: StatCardProps) {
 export type StudentStatsRowProps = {
   role: SessionRole;
   userId: string;
+  resolvedUserId?: string;
   upcoming: number;
   messages: number;
   counselors: number;
@@ -51,6 +52,7 @@ export type StudentStatsRowProps = {
 export default function StudentStatsRow({
   role,
   userId,
+  resolvedUserId,
   upcoming,
   messages,
   counselors,
@@ -79,33 +81,6 @@ export default function StudentStatsRow({
     },
     staleTime: 30_000,
   });
-
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`student-stats-notifications-${role}-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        (payload) => {
-          const row = ((payload.new ?? payload.old) as {
-            recipient_id?: string;
-            recipient_role?: SessionRole;
-          }) ?? {};
-
-          if (row.recipient_id !== userId || row.recipient_role !== role) {
-            return;
-          }
-
-          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [notificationsQueryKey, queryClient, role, userId]);
 
   useEffect(() => {
     setOnlineCounselors(counselors);

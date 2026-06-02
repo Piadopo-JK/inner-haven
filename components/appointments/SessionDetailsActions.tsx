@@ -109,16 +109,18 @@ export default function SessionDetailsActions({
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
-      .channel(`appointment-details-${appointmentId}`)
+      .channel(`appointment-details-${appointmentId}-${crypto.randomUUID().slice(0, 8)}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "appointments",
-          filter: `appointment_id=eq.${appointmentId}`,
         },
-        () => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          const rowId = ((payload.new ?? payload.old) as Record<string, unknown>).appointment_id as string | undefined;
+          if (rowId !== appointmentId) return;
+
           void queryClient.invalidateQueries({
             queryKey: queryKeys.appointmentDetails(appointmentId),
           });
@@ -276,7 +278,7 @@ export default function SessionDetailsActions({
               </Button>
             ) : null}
 
-            {isPending ? (
+            {canCancel ? (
               <Button
                 variant="outline"
                 onClick={handleCancel}
@@ -287,20 +289,22 @@ export default function SessionDetailsActions({
                 <X className="w-4 h-4" />
                 {activeAction === "cancel" ? "Cancelling..." : "Cancel"}
               </Button>
-            ) : (
+            ) : null}
+
+            {canOpenSessionFeedback && !isPending ? (
               <Button
                 asChild
                 variant="outline"
-                disabled={!canOpenSessionFeedback || isBusy}
+                disabled={isBusy}
                 className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold"
-                style={{ background: "var(--md-sys-color-surface)", borderColor: "var(--md-sys-color-error-container)", color: "var(--md-sys-color-error)" }}
+                style={{ background: "var(--md-sys-color-surface)", borderColor: "var(--md-sys-color-outline-variant)", color: "var(--md-sys-color-primary)" }}
               >
                 <Link href={notesHref}>
                   <ClipboardCheck className="w-4 h-4" />
                   Session Feedback
                 </Link>
               </Button>
-            )}
+            ) : null}
           </>
         ) : (
           <>

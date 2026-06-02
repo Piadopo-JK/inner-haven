@@ -103,6 +103,7 @@ export function CounselorDashboardNextSessionSection({
       participantName={studentForNextSession?.name || "Student"}
       participantAvatar={studentForNextSession?.avatar_url}
       todayIso={todayIso}
+      role="counselor"
     />
   );
 }
@@ -120,10 +121,12 @@ export function CounselorDashboardSidebarSection({ todayIso }: { todayIso: strin
 
 export function StudentDashboardStatsSection({
   userId,
+  resolvedUserId,
   todayIso,
   unreadMessages,
 }: {
   userId: string;
+  resolvedUserId?: string;
   todayIso: string;
   unreadMessages: number;
 }) {
@@ -143,6 +146,7 @@ export function StudentDashboardStatsSection({
     <StudentStatsRow
       role="student"
       userId={userId}
+      resolvedUserId={resolvedUserId}
       upcoming={dashboardOverview.upcomingCount}
       messages={unreadMessages}
       counselors={0}
@@ -182,6 +186,7 @@ export function StudentDashboardNextSessionSection({
       participantAvatar={counselorForNextSession?.avatar_url}
       todayIso={todayIso}
       showParticipantOnlineStatus
+      role="student"
     />
   );
 }

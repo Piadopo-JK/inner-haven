@@ -23,11 +23,13 @@ import { useAppointments } from "@/lib/query/hooks/useAppointments";
 type StudentDashboardClientProps = {
   studentId: string;
   userName: string;
+  resolvedUserId?: string;
 };
 
 export default function StudentDashboardClient({
   studentId,
   userName,
+  resolvedUserId,
 }: StudentDashboardClientProps) {
   const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
   const { isLoading: appointmentsLoading } = useAppointments("student");
@@ -46,6 +48,7 @@ export default function StudentDashboardClient({
       ) : (
         <StudentDashboardStatsSection
           userId={studentId}
+          resolvedUserId={resolvedUserId}
           todayIso={todayIso}
           unreadMessages={unreadData?.count ?? 0}
         />
