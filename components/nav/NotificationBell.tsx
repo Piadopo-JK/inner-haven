@@ -17,16 +17,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
+import { debouncedInvalidate } from "@/lib/query/debounce-invalidate";
 
 interface NotificationBellProps {
   role: SessionRole;
   userId: string;
+  resolvedUserId?: string;
   notifications: NotificationDTO[];
 }
 
 export default function NotificationBell({
   role,
   userId,
+  resolvedUserId,
   notifications,
 }: NotificationBellProps) {
   const router = useRouter();
@@ -57,7 +60,7 @@ export default function NotificationBell({
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
-      .channel(`notifications-${role}-${userId}`)
+      .channel(`notifications-${role}-${userId}-${crypto.randomUUID().slice(0, 8)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
@@ -67,11 +70,12 @@ export default function NotificationBell({
             recipient_role?: SessionRole;
           }) ?? {};
 
-          if (row.recipient_id !== userId || row.recipient_role !== role) {
+          const matchId = resolvedUserId ?? userId;
+          if (row.recipient_id !== matchId || row.recipient_role !== role) {
             return;
           }
 
-          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+          void debouncedInvalidate(queryClient, { queryKey: notificationsQueryKey });
         },
       )
       .subscribe();

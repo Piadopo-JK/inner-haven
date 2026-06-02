@@ -50,13 +50,11 @@ function getNotificationHref(notification: NotificationDTO) {
   }
 
   if (notification.anonymous_thread_id) {
-    return notification.recipient_role === "student"
-      ? `/messaging?threadId=${notification.anonymous_thread_id}`
-      : `/anonymous-requests?threadId=${notification.anonymous_thread_id}`;
+    return `/messaging?threadId=${notification.anonymous_thread_id}`;
   }
 
   if (notification.type === "session_notes") {
-    return notification.recipient_role === "student" ? "/messaging" : "/anonymous-requests";
+    return "/messaging";
   }
 
   return "/appointments";
