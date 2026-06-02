@@ -15,7 +15,6 @@ import {
   DashboardSidebarSkeleton,
   DashboardStatsRowSkeleton,
 } from "@/components/dashboard/DashboardRouteSkeletons";
-import BookingFAB from "@/components/dashboard/BookingFAB";
 import { useUnreadCount } from "@/lib/query/hooks/useUnreadCount";
 import { useStudents, EMPTY_STUDENTS } from "@/lib/query/hooks/useStudents";
 import { useAppointments } from "@/lib/query/hooks/useAppointments";
@@ -75,8 +74,6 @@ export default function CounselorDashboardClient({
           <CounselorDashboardSidebarSection todayIso={todayIso} />
         )}
       </section>
-
-      <BookingFAB />
     </main>
   );
 }

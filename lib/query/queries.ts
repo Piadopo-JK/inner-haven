@@ -41,7 +41,7 @@ export const UNREAD_COUNT_STALE_MS = 30_000;
 export const GOOGLE_INTEGRATION_STALE_MS = 60_000;
 export const AUTH_ME_STALE_MS = 30 * 60_000; // 30min — role/userId rarely changes
 export const ANONYMOUS_THREADS_STALE_MS = 30_000;
-export const ANONYMOUS_MESSAGES_STALE_MS = 20_000;
+export const ANONYMOUS_MESSAGES_STALE_MS = 10_000;
 
 export const queryKeys = {
   profile: () => ["profile"] as const,

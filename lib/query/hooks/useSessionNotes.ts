@@ -89,16 +89,18 @@ export function useSessionNotesRealtimeSync(appointmentId: string) {
 
     const supabase = createClient();
     const channel = supabase
-      .channel(`session-notes-realtime-${appointmentId}`)
+      .channel(`session-notes-rt-${appointmentId}-${crypto.randomUUID().slice(0, 8)}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "session_notes",
-          filter: `appointment_id=eq.${appointmentId}`,
         },
-        () => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          const rowId = ((payload.new ?? payload.old) as Record<string, unknown>).appointment_id as string | undefined;
+          if (rowId !== appointmentId) return;
+
           void queryClient.invalidateQueries({
             queryKey: queryKeys.sessionNotes(appointmentId),
           });
@@ -110,9 +112,11 @@ export function useSessionNotesRealtimeSync(appointmentId: string) {
           event: "*",
           schema: "public",
           table: "appointments",
-          filter: `appointment_id=eq.${appointmentId}`,
         },
-        () => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          const rowId = ((payload.new ?? payload.old) as Record<string, unknown>).appointment_id as string | undefined;
+          if (rowId !== appointmentId) return;
+
           void queryClient.invalidateQueries({
             queryKey: queryKeys.appointmentDetails(appointmentId),
           });

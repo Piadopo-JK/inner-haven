@@ -158,13 +158,17 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
     const supabase = createClient();
 
     const channel = supabase
-      .channel(`booking-form-realtime-${selectedCounselorId}`)
+      .channel(`booking-form-rt-${selectedCounselorId}-${crypto.randomUUID().slice(0, 8)}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "appointments", filter: `counselor_id=eq.${selectedCounselorId}` },
-        (payload) => {
+        { event: "*", schema: "public", table: "appointments" },
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           const nextRow = (payload.new ?? {}) as Record<string, unknown>;
           const previousRow = (payload.old ?? {}) as Record<string, unknown>;
+
+          const rowCounselorId = (nextRow.counselor_id ?? previousRow.counselor_id) as string | undefined;
+          if (rowCounselorId !== selectedCounselorId) return;
+
           const nextStatus = nextRow.status as string | undefined;
           const previousStatus = previousRow.status as string | undefined;
 
@@ -178,15 +182,6 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
               setScheduleSummary(undefined);
             }
           }
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "availability", filter: `counselor_id=eq.${selectedCounselorId}` },
-        () => {
-          void invalidateAvailability(selectedCounselorId);
-          setSlots([]);
-          setScheduleSummary(undefined);
         },
       )
       .subscribe();
@@ -349,6 +344,7 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                   isLoading={isLoadingSlots}
                   emptyState={slotsEmptyState}
                   counselorName={selectedCounselor?.name}
+                  selectedDate={selectedDate ? formatDateOnly(selectedDate) : undefined}
                 />
               </div>
 

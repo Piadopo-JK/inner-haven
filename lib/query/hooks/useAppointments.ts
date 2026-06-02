@@ -43,7 +43,7 @@ type SaveAppointmentInput = {
 
 type UpdateCounselorAppointmentStatusInput = {
   appointmentId: string;
-  status: "approved" | "cancelled";
+  status: "approved" | "cancelled" | "completed";
 };
 
 type RescheduleCounselorAppointmentInput = {
@@ -116,16 +116,26 @@ export function useAppointmentsRealtimeSync(role: SessionRole) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    const instanceId = crypto.randomUUID().slice(0, 8);
     const supabase = createClient();
     const channel = supabase
-      .channel(`appointments-realtime-${role}`)
+      .channel(`appointments-rt-${role}-${instanceId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments" },
-        () => {
-          debouncedInvalidate(queryClient, {
+        (payload) => {
+          void queryClient.invalidateQueries({
             queryKey: queryKeys.appointments(role),
           });
+
+          const row = (payload.new ?? payload.old ?? {}) as Record<string, unknown>;
+          const counselorId = row.counselor_id as string | undefined;
+          if (counselorId) {
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.availabilityByCounselor(counselorId),
+              exact: false,
+            });
+          }
         },
       )
       .subscribe();

@@ -11,7 +11,7 @@ import {
 } from "@/components/dashboard/DashboardRouteSkeletons";
 import { useAuthGuard } from "@/lib/query/hooks/useAuthGuard";
 
-export default function DashboardShell() {
+export default function DashboardShell({ resolvedUserId }: { resolvedUserId?: string | null }) {
   const guard = useAuthGuard();
 
   if (guard.status === "loading" || guard.status === "unauthenticated") {
@@ -35,7 +35,10 @@ export default function DashboardShell() {
 
   if (guard.me.role === "counselor") {
     return (
-      <CounselorDashboardClient counselorName={guard.me.name} />
+      <CounselorDashboardClient
+        counselorName={guard.me.name}
+        resolvedUserId={resolvedUserId ?? undefined}
+      />
     );
   }
 
@@ -43,6 +46,7 @@ export default function DashboardShell() {
     <StudentDashboardClient
       studentId={guard.me.userId}
       userName={guard.me.name}
+      resolvedUserId={resolvedUserId ?? undefined}
     />
   );
 }
