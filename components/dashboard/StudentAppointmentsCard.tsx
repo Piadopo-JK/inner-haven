@@ -36,6 +36,7 @@ function AppointmentActions({
 }) {
   const [isBusy, setIsBusy] = useState(false);
   const canCancel = appointment.status === "pending" || appointment.status === "approved";
+  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
 
   async function handleCancel() {
     setIsBusy(true);
@@ -60,6 +61,13 @@ function AppointmentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="rounded-xl">
+        {canJoinOnline ? (
+          <DropdownMenuItem asChild className="cursor-pointer">
+            <a href={appointment.meeting_link} target="_blank" rel="noreferrer">
+              Join Session Now
+            </a>
+          </DropdownMenuItem>
+        ) : null}
         {canCancel ? (
           <DropdownMenuItem
             className="cursor-pointer text-[var(--md-sys-color-error)]"
@@ -130,6 +138,9 @@ export default function StudentAppointmentsCard({
             emptyMessage: "No pending appointments.",
             getParticipantName: (a) => getCounselorName(a.counselor_id),
             participantNameFallback: "Counselor",
+            renderActions: (a) => (
+              <AppointmentActions appointment={a} onCancel={handleOptimisticCancel} />
+            ),
           },
         ]}
       />

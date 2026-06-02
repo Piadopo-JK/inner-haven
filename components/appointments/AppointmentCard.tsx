@@ -26,6 +26,8 @@ interface AppointmentCardProps {
   participantAvatar?: string;
   onCancelAppointment?: (appointment: AppointmentDTO) => Promise<void>;
   onApproveAppointment?: (appointment: AppointmentDTO) => Promise<void>;
+  onDeclineAppointment?: (appointment: AppointmentDTO) => Promise<void>;
+  onCompleteAppointment?: (appointment: AppointmentDTO) => Promise<void>;
 }
 
 function formatDisplayTime(rawTime: string) {
@@ -90,6 +92,8 @@ export default function AppointmentCard({
   participantAvatar,
   onCancelAppointment,
   onApproveAppointment,
+  onDeclineAppointment,
+  onCompleteAppointment,
 }: AppointmentCardProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -97,14 +101,19 @@ export default function AppointmentCard({
 
   const detailsHref = `/appointments/${appointment.appointment_id}`;
   const editHref = `/appointments/${appointment.appointment_id}/edit`;
+  const notesHref = `/appointments/${appointment.appointment_id}/notes`;
   const displayTime = formatDisplayTime(appointment.appointment_time);
 
   const canCancel =
     appointment.status === "pending" || appointment.status === "approved";
   const canApprove = role === "counselor" && appointment.status === "pending";
-  const canJoinOnline = appointment.mode === "online" && Boolean(appointment.meeting_link);
+  const canDecline = role === "counselor" && appointment.status === "pending";
+  const canComplete = role === "counselor" && appointment.status === "approved";
+  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
   const canEdit = role === "student" && appointment.status === "pending";
-  const showMenu = !["completed", "cancelled", "expired"].includes(appointment.status);
+  const canViewNotes = (role === "counselor" && (appointment.status === "approved" || appointment.status === "completed"))
+    || (role === "student" && appointment.status === "completed");
+  const showMenu = !["cancelled", "expired"].includes(appointment.status);
   const todayIso = new Date().toISOString().split("T")[0];
   const ribbon = getStatusRibbon(appointment, todayIso);
 
@@ -134,6 +143,26 @@ export default function AppointmentCard({
     }
   }
 
+  async function handleDecline() {
+    if (!onDeclineAppointment) return;
+    setIsCancelling(true);
+    try {
+      await onDeclineAppointment(appointment);
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  async function handleComplete() {
+    if (!onCompleteAppointment) return;
+    setIsCancelling(true);
+    try {
+      await onCompleteAppointment(appointment);
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
   function prefetchAppointmentDetails() {
     void queryClient.prefetchQuery(
       appointmentDetailsQueryOptions(appointment.appointment_id),
@@ -142,11 +171,25 @@ export default function AppointmentCard({
 
   return (
     <Card
-      className="w-full min-w-0 max-w-full p-6 rounded-[24px] border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] shadow-sm hover:shadow-md transition-shadow overflow-hidden break-words cursor-pointer"
+      className="w-full min-w-0 max-w-full p-6 rounded-[24px] cursor-pointer overflow-hidden break-words transition-all duration-200"
+      style={{
+        border: "1px solid var(--md-sys-color-outline-variant)",
+        background: "var(--md-sys-color-surface)",
+        boxShadow: "var(--md-sys-elevation-level1)",
+      }}
       role="link"
       tabIndex={0}
-      onMouseEnter={prefetchAppointmentDetails}
-      onFocus={prefetchAppointmentDetails}
+      onMouseEnter={(e) => {
+        prefetchAppointmentDetails();
+        const el = e.currentTarget;
+        el.style.borderColor = "var(--md-sys-color-primary)";
+        el.style.boxShadow = "var(--md-sys-elevation-level3)";
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget;
+        el.style.borderColor = "var(--md-sys-color-outline-variant)";
+        el.style.boxShadow = "var(--md-sys-elevation-level1)";
+      }}
       onClick={(event) => {
         const target = event.target as HTMLElement;
         if (target.closest("[data-no-card-nav='true']")) {
@@ -205,10 +248,7 @@ export default function AppointmentCard({
           <div
             data-no-card-nav="true"
             className="self-center shrink-0"
-            onPointerDown={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
           >
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -237,6 +277,25 @@ export default function AppointmentCard({
                   disabled={isCancelling}
                 >
                   {isCancelling ? "Updating..." : "Accept Appointment"}
+                </DropdownMenuItem>
+              ) : null}
+              {canDecline ? (
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href={editHref}>Reschedule</Link>
+                </DropdownMenuItem>
+              ) : null}
+              {canComplete ? (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={handleComplete}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? "Updating..." : "Mark Complete"}
+                </DropdownMenuItem>
+              ) : null}
+              {canViewNotes ? (
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href={notesHref}>Session Notes</Link>
                 </DropdownMenuItem>
               ) : null}
               {canEdit ? (

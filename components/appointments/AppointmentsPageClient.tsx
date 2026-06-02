@@ -68,6 +68,36 @@ export default function AppointmentsPageClient({
     }
   }
 
+  async function handleDeclineAppointment(appointment: AppointmentDTO) {
+    if (role !== "counselor") {
+      return;
+    }
+
+    try {
+      await updateCounselorStatus({
+        appointmentId: appointment.appointment_id,
+        status: "cancelled",
+      });
+    } catch (error) {
+      console.error("Failed to decline appointment", error);
+    }
+  }
+
+  async function handleCompleteAppointment(appointment: AppointmentDTO) {
+    if (role !== "counselor") {
+      return;
+    }
+
+    try {
+      await updateCounselorStatus({
+        appointmentId: appointment.appointment_id,
+        status: "completed",
+      });
+    } catch (error) {
+      console.error("Failed to complete appointment", error);
+    }
+  }
+
   const filteredAppointments = appointmentsByTab[activeTab];
   const activeCount = filteredAppointments.length;
 
@@ -118,6 +148,8 @@ export default function AppointmentsPageClient({
                   participantAvatar={participant.avatar}
                   onCancelAppointment={handleCancelAppointment}
                   onApproveAppointment={handleApproveAppointment}
+                  onDeclineAppointment={handleDeclineAppointment}
+                  onCompleteAppointment={handleCompleteAppointment}
                 />
               );
             })
