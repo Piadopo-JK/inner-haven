@@ -38,7 +38,7 @@ export default function CounselorHeartbeat() {
         },
       });
 
-      channel.subscribe(async (status) => {
+      channel.subscribe(async (status: string) => {
         if (status !== "SUBSCRIBED") {
           return;
         }
