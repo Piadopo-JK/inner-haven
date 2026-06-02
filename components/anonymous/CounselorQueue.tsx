@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Trash2, Info } from "lucide-react";
 
 import AnonymousChat from "@/components/anonymous/AnonymousChat";
 import ThreadList from "@/components/anonymous/ThreadList";
@@ -17,28 +18,33 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
   const [selectedThreadId, setSelectedThreadId] = useState<string>();
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
   const [detachError, setDetachError] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
   const { data: threads = [], isLoading: isLoadingQueue } = useAnonymousCounselorThreads();
   const { mutateAsync: detachThread, isPending: isDetaching } = useDetachThreadByCounselor();
 
   useCounselorAnonymousThreadsRealtimeSync();
 
+  const activeThreads = useMemo(() => threads.filter((t) => t.status !== "detached"), [threads]);
+  const detachedThreads = useMemo(() => threads.filter((t) => t.status === "detached"), [threads]);
+  const displayThreads = showTrash ? detachedThreads : activeThreads;
+
   useEffect(() => {
     setSelectedThreadId((previous) => {
-      if (previous && threads.some((thread) => thread.id === previous)) {
+      if (previous && displayThreads.some((thread) => thread.id === previous)) {
         return previous;
       }
 
-      if (initialThreadId && threads.some((thread) => thread.id === initialThreadId)) {
+      if (initialThreadId && displayThreads.some((thread) => thread.id === initialThreadId)) {
         return initialThreadId;
       }
 
-      return threads[0]?.id;
+      return displayThreads[0]?.id;
     });
-  }, [initialThreadId, threads]);
+  }, [initialThreadId, displayThreads]);
 
   const selectedThread = useMemo(
-    () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
-    [selectedThreadId, threads],
+    () => displayThreads.find((thread) => thread.id === selectedThreadId) ?? null,
+    [selectedThreadId, displayThreads],
   );
 
   async function handleDetachAndRemove() {
@@ -67,52 +73,58 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
 
   if (showDetachConfirm && selectedThread) {
     return (
-      <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center p-8">
-        <div
-          className="w-full rounded-2xl border p-6 text-center"
-          style={{ borderColor: "var(--md-sys-color-outline-variant)" }}
-        >
-          <h2 className="text-lg font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-            Remove this thread?
-          </h2>
-          <p
-            className="mt-3 text-sm leading-relaxed"
-            style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+      <>
+        <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="w-full max-w-md rounded-2xl border p-6 text-center shadow-xl"
+            style={{
+              borderColor: "var(--md-sys-color-outline-variant)",
+              background: "var(--md-sys-color-surface-container-high)",
+            }}
           >
-            The conversation with <strong>{selectedThread.anonymousLabel}</strong> will be
-            closed. The student will no longer be able to send messages in this thread,
-            but you will still be able to view the history.
-          </p>
-          {detachError ? (
-            <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
-              {detachError}
+            <h2 className="text-lg font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+              Remove this thread?
+            </h2>
+            <p
+              className="mt-3 text-sm leading-relaxed"
+              style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+            >
+              The conversation with <strong>{selectedThread.anonymousLabel}</strong> will be
+              closed. The student will no longer be able to send messages in this thread,
+              but you will still be able to view the history.
             </p>
-          ) : null}
-          <div className="mt-6 flex flex-col gap-3">
-            <Button
-              className="rounded-full"
-              style={{
-                background: "var(--md-sys-color-primary)",
-                color: "var(--md-sys-color-on-primary)",
-              }}
-              disabled={isDetaching}
-              onClick={handleDetachAndRemove}
-            >
-              {isDetaching ? "Removing…" : "Remove thread"}
-            </Button>
-            <Button
-              variant="ghost"
-              className="rounded-full"
-              onClick={() => {
-                setShowDetachConfirm(false);
-                setDetachError("");
-              }}
-            >
-              Cancel
-            </Button>
+            {detachError ? (
+              <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
+                {detachError}
+              </p>
+            ) : null}
+            <div className="mt-6 flex flex-col gap-3">
+              <Button
+                className="rounded-full"
+                style={{
+                  background: "var(--md-sys-color-primary)",
+                  color: "var(--md-sys-color-on-primary)",
+                }}
+                disabled={isDetaching}
+                onClick={handleDetachAndRemove}
+              >
+                {isDetaching ? "Removing…" : "Remove thread"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="rounded-full"
+                onClick={() => {
+                  setShowDetachConfirm(false);
+                  setDetachError("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
-      </main>
+      </>
     );
   }
 
@@ -125,14 +137,41 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
           className="flex h-full min-h-0 flex-col rounded-2xl border p-3"
           style={{
             borderColor: "var(--md-sys-color-outline-variant)",
-            background: "var(--md-sys-color-surface-container-high)",
+            background: "var(--msg-sidebar-bg)",
+            boxShadow: "var(--md-sys-elevation-level2)",
           }}
         >
-          <h1 className="mb-3 text-base font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-            Anonymous Queue
-          </h1>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
+                {showTrash ? "Trash" : "Anonymous Queue"}
+              </h1>
+              <span className="relative group">
+                <Info className="h-3.5 w-3.5 cursor-help" style={{ color: "var(--md-sys-color-on-surface-variant)" }} />
+                <span className="pointer-events-none absolute left-0 top-full mt-1.5 w-48 rounded-lg border px-2.5 py-1.5 text-[11px] leading-relaxed opacity-0 transition-opacity group-hover:opacity-100 z-50"
+                  style={{
+                    borderColor: "var(--md-sys-color-outline-variant)",
+                    background: "var(--md-sys-color-surface-container-high)",
+                    color: "var(--md-sys-color-on-surface-variant)",
+                    boxShadow: "var(--md-sys-elevation-level2)",
+                  }}
+                >
+                  Conversations are pseudonymous and automatically expire after 7 days of inactivity.
+                </span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setShowTrash((p) => !p); setSelectedThreadId(undefined); }}
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_10%,transparent)]"
+              style={{ color: showTrash ? "var(--md-sys-color-error)" : "var(--md-sys-color-on-surface-variant)" }}
+              aria-label={showTrash ? "Back to queue" : "Trash"}
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          </div>
           <ThreadList
-            threads={threads.map((t) => ({
+            threads={displayThreads.map((t) => ({
               id: t.id,
               counselorId: "",
               counselorName: t.anonymousLabel,
@@ -171,7 +210,8 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
               className="flex h-full items-center justify-center rounded-2xl border p-6"
               style={{
                 borderColor: "var(--md-sys-color-outline-variant)",
-                background: "var(--md-sys-color-surface-container-low)",
+                background: "var(--msg-chat-bg)",
+                boxShadow: "var(--md-sys-elevation-level1)",
               }}
             >
               <p className="text-sm" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
@@ -207,12 +247,24 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
             className="flex h-full w-full min-h-0 flex-col rounded-2xl border p-3"
             style={{
               borderColor: "var(--md-sys-color-outline-variant)",
-              background: "var(--md-sys-color-surface-container-high)",
+              background: "var(--msg-sidebar-bg)",
+              boxShadow: "var(--md-sys-elevation-level2)",
             }}
           >
-            <h1 className="mb-3 text-base font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-              Anonymous Queue
-            </h1>
+            <div className="mb-3 flex items-center justify-between">
+              <h1 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
+                {showTrash ? "Trash" : "Anonymous Queue"}
+              </h1>
+              <button
+                type="button"
+                onClick={() => { setShowTrash((p) => !p); setSelectedThreadId(undefined); }}
+                className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_10%,transparent)]"
+                style={{ color: showTrash ? "var(--md-sys-color-error)" : "var(--md-sys-color-on-surface-variant)" }}
+                aria-label={showTrash ? "Back to queue" : "Trash"}
+              >
+                <Trash2 className="h-5 w-5" />
+              </button>
+            </div>
             <ThreadList
               threads={threads.map((t) => ({
                 id: t.id,

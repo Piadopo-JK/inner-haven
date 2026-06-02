@@ -48,7 +48,7 @@ export const primaryNavItems: NavItem[] = [
   {
     id: "anonymous-queue",
     label: "Anonymous Queue",
-    href: "/anonymous-requests",
+    href: "/messaging",
     icon: CircleHelp,
     roles: ["counselor"],
   },

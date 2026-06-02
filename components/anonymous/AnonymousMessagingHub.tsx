@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Search, X } from "lucide-react";
+import { Plus, Search, X, Info } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -53,7 +53,7 @@ export default function AnonymousMessagingHub({
     );
   }, [counselors, counselorSearch]);
 
-  useAnonymousIdentityRealtimeSync();
+  useAnonymousIdentityRealtimeSync(studentThreads?.ownerAuthUserId);
 
   const threads = studentThreads?.threads ?? [];
 
@@ -78,7 +78,7 @@ export default function AnonymousMessagingHub({
         if (match) return match.id;
       }
 
-      if (threads.length === 1) return threads[0]!.id;
+      if (threads.length > 0 && !previous) return threads[0]!.id;
 
       return undefined;
     });
@@ -113,58 +113,6 @@ export default function AnonymousMessagingHub({
     );
   }
 
-  if (showDetachConfirm && selectedThread) {
-    return (
-      <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center p-8">
-        <div
-          className="w-full rounded-2xl border p-6 text-center"
-          style={{ borderColor: "var(--md-sys-color-outline-variant)" }}
-        >
-          <h2 className="text-lg font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-            Start a new conversation?
-          </h2>
-          <p
-            className="mt-3 text-sm leading-relaxed"
-            style={{ color: "var(--md-sys-color-on-surface-variant)" }}
-          >
-            This will close your existing conversation with{" "}
-            <strong>{selectedThread.counselorName}</strong>.
-            The counselor will see your previous messages but you will no longer
-            be able to access them. A new pseudonymous label will be used.
-          </p>
-          {detachError ? (
-            <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
-              {detachError}
-            </p>
-          ) : null}
-          <div className="mt-6 flex flex-col gap-3">
-            <Button
-              className="rounded-full"
-              style={{
-                background: "var(--md-sys-color-primary)",
-                color: "var(--md-sys-color-on-primary)",
-              }}
-              disabled={isDetaching}
-              onClick={handleDetachAndNewConversation}
-            >
-              {isDetaching ? "Closing…" : "Close & start new"}
-            </Button>
-            <Button
-              variant="ghost"
-              className="rounded-full"
-              onClick={() => {
-                setShowDetachConfirm(false);
-                setDetachError("");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   if (counselorId && !activeThreadWithCounselor) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-lg p-8">
@@ -194,13 +142,14 @@ export default function AnonymousMessagingHub({
   if (threads.length === 0 && !counselorId) {
     return (
       <main
-        className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4 anonymous-hub-bg"
+        className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4"
       >
         <div
           className="flex h-full items-center justify-center rounded-2xl border p-6"
           style={{
             borderColor: "var(--md-sys-color-outline-variant)",
-            background: "var(--md-sys-color-surface-container-low)",
+            background: "var(--msg-chat-bg)",
+            boxShadow: "var(--md-sys-elevation-level1)",
           }}
         >
           <p className="text-sm" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
@@ -221,14 +170,15 @@ export default function AnonymousMessagingHub({
 
   return (
     <main
-      className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4 anonymous-hub-bg"
+      className="mx-auto h-[calc(100dvh-5rem)] w-full max-w-7xl overflow-hidden p-4"
     >
       <section className="hidden h-full gap-4 md:grid md:grid-cols-[320px_1fr]">
         <aside
           className="flex h-full min-h-0 flex-col rounded-2xl border p-3"
           style={{
             borderColor: "var(--md-sys-color-outline-variant)",
-            background: "var(--md-sys-color-surface-container-high)",
+            background: "var(--msg-sidebar-bg)",
+            boxShadow: "var(--md-sys-elevation-level2)",
           }}
         >
           {sidebarView === "pick-counselor" ? (
@@ -246,7 +196,7 @@ export default function AnonymousMessagingHub({
                 >
                   <X className="h-4 w-4" />
                 </button>
-                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--msg-label-color)" }}>
                   New conversation
                 </h2>
               </div>
@@ -350,7 +300,7 @@ export default function AnonymousMessagingHub({
                 >
                   <X className="h-4 w-4" />
                 </button>
-                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--msg-label-color)" }}>
                   New message
                 </h2>
               </div>
@@ -365,9 +315,24 @@ export default function AnonymousMessagingHub({
           ) : (
             <>
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                  Conversations
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
+                    Messaging
+                  </h2>
+                  <span className="relative group">
+                    <Info className="h-3.5 w-3.5 cursor-help" style={{ color: "var(--md-sys-color-on-surface-variant)" }} />
+                    <span className="pointer-events-none absolute left-0 top-full mt-1.5 w-48 rounded-lg border px-2.5 py-1.5 text-[11px] leading-relaxed opacity-0 transition-opacity group-hover:opacity-100 z-50"
+                      style={{
+                        borderColor: "var(--md-sys-color-outline-variant)",
+                        background: "var(--md-sys-color-surface-container-high)",
+                        color: "var(--md-sys-color-on-surface-variant)",
+                        boxShadow: "var(--md-sys-elevation-level2)",
+                      }}
+                    >
+                      Conversations are pseudonymous and automatically expire after 7 days of inactivity.
+                    </span>
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setSidebarView("pick-counselor")}
@@ -382,6 +347,8 @@ export default function AnonymousMessagingHub({
                 threads={threads}
                 selectedThreadId={selectedThreadId}
                 onSelect={setSelectedThreadId}
+                onNewConversation={() => setShowDetachConfirm(true)}
+                onRemove={() => setShowDetachConfirm(true)}
               />
             </>
           )}
@@ -397,10 +364,11 @@ export default function AnonymousMessagingHub({
             />
           ) : (
             <div
-              className="flex min-h-[240px] items-center justify-center rounded-2xl border p-6 text-sm"
+              className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border p-6 text-sm"
               style={{
                 borderColor: "var(--md-sys-color-outline-variant)",
-                background: "var(--md-sys-color-surface-container-low)",
+                background: "var(--msg-chat-bg)",
+                boxShadow: "var(--md-sys-elevation-level1)",
                 color: "var(--md-sys-color-on-surface-variant)",
               }}
             >
@@ -426,13 +394,29 @@ export default function AnonymousMessagingHub({
             className="flex h-full w-full min-h-0 flex-col rounded-2xl border p-3"
             style={{
               borderColor: "var(--md-sys-color-outline-variant)",
-              background: "var(--md-sys-color-surface-container-high)",
+              background: "var(--msg-sidebar-bg)",
+              boxShadow: "var(--md-sys-elevation-level2)",
             }}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                Conversations
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
+                  Messaging
+                </h2>
+                <span className="relative group">
+                  <Info className="h-3.5 w-3.5 cursor-help" style={{ color: "var(--md-sys-color-on-surface-variant)" }} />
+                  <span className="pointer-events-none absolute left-0 top-full mt-1.5 w-48 rounded-lg border px-2.5 py-1.5 text-[11px] leading-relaxed opacity-0 transition-opacity group-hover:opacity-100 z-50"
+                    style={{
+                      borderColor: "var(--md-sys-color-outline-variant)",
+                      background: "var(--md-sys-color-surface-container-high)",
+                      color: "var(--md-sys-color-on-surface-variant)",
+                      boxShadow: "var(--md-sys-elevation-level2)",
+                    }}
+                  >
+                    Conversations are pseudonymous and automatically expire after 7 days of inactivity.
+                  </span>
+                </span>
+              </div>
               <a
                 href="/counselors"
                 className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_10%,transparent)]"
@@ -446,13 +430,68 @@ export default function AnonymousMessagingHub({
               threads={threads}
               selectedThreadId={selectedThreadId}
               onSelect={setSelectedThreadId}
+              onNewConversation={() => setShowDetachConfirm(true)}
+              onRemove={() => setShowDetachConfirm(true)}
             />
           </aside>
         )}
       </section>
+
+      {showDetachConfirm && selectedThread ? (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[2px]" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="w-full max-w-md rounded-2xl border p-6 text-center shadow-xl"
+              style={{
+                borderColor: "var(--md-sys-color-outline-variant)",
+                background: "var(--md-sys-color-surface-container-high)",
+              }}
+            >
+              <h2 className="text-lg font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                Start a new conversation?
+              </h2>
+              <p
+                className="mt-3 text-sm leading-relaxed"
+                style={{ color: "var(--md-sys-color-on-surface-variant)" }}
+              >
+                This will close your existing conversation with{" "}
+                <strong>{selectedThread.counselorName}</strong>.
+                The counselor will see your previous messages but you will no longer
+                be able to access them. A new pseudonymous label will be used.
+              </p>
+              {detachError ? (
+                <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
+                  {detachError}
+                </p>
+              ) : null}
+              <div className="mt-6 flex flex-col gap-3">
+                <Button
+                  className="rounded-full"
+                  style={{
+                    background: "var(--md-sys-color-primary)",
+                    color: "var(--md-sys-color-on-primary)",
+                  }}
+                  disabled={isDetaching}
+                  onClick={handleDetachAndNewConversation}
+                >
+                  {isDetaching ? "Closing…" : "Close & start new"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="rounded-full"
+                  onClick={() => {
+                    setShowDetachConfirm(false);
+                    setDetachError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
     </main>
   );
 }
-
-
-
