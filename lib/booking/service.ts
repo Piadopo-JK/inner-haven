@@ -52,7 +52,11 @@ export class BookingService {
     return this.repo.getAppointmentById(appointmentId);
   }
 
-  async updateAppointmentStatus(id: string, status: AppointmentStatus) {
+  async updateAppointmentStatus(
+    id: string,
+    status: AppointmentStatus,
+    performedBy?: "student" | "counselor",
+  ) {
     let meetingLink: string | undefined;
 
     if (status === "approved") {
@@ -88,7 +92,7 @@ export class BookingService {
       }
     }
 
-    return this.repo.updateAppointmentStatus(id, status, meetingLink);
+    return this.repo.updateAppointmentStatus(id, status, meetingLink, performedBy);
   }
 
   rescheduleAppointment(id: string, appointmentDate: string, appointmentTime: string) {

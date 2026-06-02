@@ -25,7 +25,7 @@ export async function updateAppointmentStatusAction(
   }
 
   try {
-    await bookingService.updateAppointmentStatus(appointmentId, status);
+    await bookingService.updateAppointmentStatus(appointmentId, status, "counselor");
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
 
@@ -62,7 +62,7 @@ export async function cancelStudentAppointmentAction(appointmentId: string): Pro
     throw new Error("Appointment cannot be cancelled");
   }
 
-  await bookingService.updateAppointmentStatus(appointmentId, "cancelled");
+  await bookingService.updateAppointmentStatus(appointmentId, "cancelled", "student");
   revalidateTag(appointmentsListTag("student", sessionUser.userId), "max");
   revalidateTag(appointmentTag(appointmentId), "max");
 }

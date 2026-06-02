@@ -1115,6 +1115,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     appointmentId: string,
     status: AppointmentStatus,
     meetingLink?: string,
+    performedBy?: "student" | "counselor",
   ): Promise<AppointmentDTO | null> {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1131,8 +1132,13 @@ export class SupabaseBookingRepository implements BookingRepository {
     const now = new Date().toISOString();
 
     if (status === "approved" || status === "cancelled") {
-      const type = status === "approved" ? "booking_approved" : "booking_declined";
-      const verb = status === "approved" ? "approved" : "declined";
+      const isStudentCancel = status === "cancelled" && performedBy === "student";
+      const type = status === "approved"
+        ? "booking_approved"
+        : isStudentCancel ? "booking_cancelled" : "booking_declined";
+      const verb = status === "approved"
+        ? "approved"
+        : isStudentCancel ? "cancelled" : "declined";
 
       let message = `Your booking for ${appointment.appointment_date} at ${appointment.appointment_time} has been ${verb}`;
       if (status === "approved" && meetingLink) {
@@ -1233,7 +1239,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .update({ read: true })
       .eq("recipient_role", role)
       .eq("recipient_id", resolvedUserId)
-      .eq("read", false)
       .select("notification_id");
 
     if (error) throw error;
@@ -1249,7 +1254,7 @@ export class SupabaseBookingRepository implements BookingRepository {
   }
 
   async getSessionNote(appointmentId: string): Promise<SessionNoteDTO | null> {
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("session_notes")
       .select("note_id, appointment_id, note_content, recommendations, follow_up, created_at, updated_at, counselor_id")

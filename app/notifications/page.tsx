@@ -27,7 +27,7 @@ export default async function NotificationsPage() {
       <h1 className="mb-6 text-xl font-semibold text-[var(--md-sys-color-on-surface)]">
         Notifications
       </h1>
-      <NotificationsList notifications={notifications} role={role} userId={userId} />
+      <NotificationsList notifications={notifications} />
     </main>
   );
 }

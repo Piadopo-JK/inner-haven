@@ -35,6 +35,7 @@ export interface BookingRepository {
     appointmentId: string,
     status: AppointmentStatus,
     meetingLink?: string,
+    performedBy?: "student" | "counselor",
   ): Promise<AppointmentDTO | null>;
   rescheduleAppointment(
     appointmentId: string,

@@ -51,6 +51,7 @@ export function useSaveCounselorSchedule() {
       queryClient.setQueryData(queryKeys.schedule(), rules);
       void queryClient.invalidateQueries({
         queryKey: queryKeys.availabilityRoot(),
+        exact: false,
       });
     },
   });
