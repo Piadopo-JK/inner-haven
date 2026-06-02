@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MoreVertical } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -39,9 +40,13 @@ function AppointmentActions({
   isBusy,
 }: {
   appointment: AppointmentDTO;
-  onAction: (appointmentId: string, status: "approved" | "cancelled") => Promise<void>;
+  onAction: (appointmentId: string, status: "approved" | "cancelled" | "completed") => Promise<void>;
   isBusy: boolean;
 }) {
+  const detailsHref = `/appointments/${appointment.appointment_id}`;
+  const notesHref = `/appointments/${appointment.appointment_id}/notes`;
+  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
+
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -50,20 +55,49 @@ function AppointmentActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="rounded-xl">
-        {appointment.status === "pending" ? (
-          <DropdownMenuItem className="cursor-pointer" onSelect={() => void onAction(appointment.appointment_id, "approved")} disabled={isBusy}>
-            {isBusy ? "Updating..." : "Accept"}
+        {canJoinOnline ? (
+          <DropdownMenuItem asChild className="cursor-pointer">
+            <a href={appointment.meeting_link} target="_blank" rel="noreferrer">
+              Join Session Now
+            </a>
           </DropdownMenuItem>
         ) : null}
+
         {appointment.status === "pending" ? (
+          <>
+            <DropdownMenuItem className="cursor-pointer" onSelect={() => void onAction(appointment.appointment_id, "approved")} disabled={isBusy}>
+              {isBusy ? "Updating..." : "Accept"}
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href={`/appointments/${appointment.appointment_id}`}>Reschedule</Link>
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {appointment.status === "approved" ? (
+          <>
+            <DropdownMenuItem className="cursor-pointer" onSelect={() => void onAction(appointment.appointment_id, "completed")} disabled={isBusy}>
+              {isBusy ? "Updating..." : "Mark Complete"}
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href={notesHref}>Session Notes</Link>
+            </DropdownMenuItem>
+          </>
+        ) : null}
+
+        {(appointment.status === "pending" || appointment.status === "approved") ? (
           <DropdownMenuItem
             className="cursor-pointer text-[var(--md-sys-color-error)]"
             onSelect={() => void onAction(appointment.appointment_id, "cancelled")}
             disabled={isBusy}
           >
-            {isBusy ? "Updating..." : "Cancel"}
+            {isBusy ? "Cancelling..." : "Cancel Appointment"}
           </DropdownMenuItem>
         ) : null}
+
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href={detailsHref}>View Details</Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -106,7 +140,7 @@ export default function CounselorAppointmentsCard({
     return studentNameById[studentId];
   }
 
-  async function handleAction(appointmentId: string, status: "approved" | "cancelled") {
+  async function handleAction(appointmentId: string, status: "approved" | "cancelled" | "completed") {
     setError("");
     setShowReconnectGoogle(false);
     try {
