@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { listStudentThreads, markStudentThreadsSeen } from "@/lib/anonymous/repository";
+import { listStudentThreads } from "@/lib/anonymous/repository";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 
 export async function POST(_request: NextRequest) {
@@ -13,10 +13,6 @@ export async function POST(_request: NextRequest) {
   }
 
   const result = await listStudentThreads(sessionUser.userId);
-
-  if (result.threads.length > 0) {
-    void markStudentThreadsSeen(sessionUser.userId);
-  }
 
   if (result.threads.length === 0) {
     return NextResponse.json({ error: "No active anonymous threads." }, { status: 404 });

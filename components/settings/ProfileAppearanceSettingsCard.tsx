@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Md3Message } from "@/components/ui/md3-message";
 import { AvatarPicker, type AvatarPickerHandle } from "@/components/ui/avatar-picker";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
   useDeleteProfileAvatar,
   useProfile,
@@ -120,74 +119,72 @@ export default function ProfileAppearanceSettingsCard() {
         </Md3Message>
       ) : (
         <div className="mt-4 space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
-            <div>
-              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Theme</p>
-              <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                Switch between light, dark, or system theme.
-              </p>
-            </div>
-            <ThemeSwitcher />
-          </div>
+          <label className="block text-sm">
+            Display name
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your display name" maxLength={120} />
+          </label>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Current Avatar</p>
-            <div className="flex items-center gap-4 rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
-              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full" style={{ border: "1px solid var(--md-sys-color-outline-variant)" }}>
-                {avatarUrl.trim() ? (
-                  <Image src={avatarUrl.trim()} alt={profile?.name || "Profile"} fill className="object-cover" sizes="64px" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-lg font-semibold" style={{ background: "var(--md-sys-color-primary-container)", color: "var(--md-sys-color-on-primary-container)" }}>
-                    {initials}
-                  </div>
-                )}
+            <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Update your profile picture</p>
+            <div className="flex flex-col gap-4 rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
+              <div className="flex items-center gap-4">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full" style={{ border: "1px solid var(--md-sys-color-outline-variant)" }}>
+                  {avatarUrl.trim() ? (
+                    <Image src={avatarUrl.trim()} alt={profile?.name || "Profile"} fill className="object-cover" sizes="64px" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-lg font-semibold" style={{ background: "var(--md-sys-color-primary-container)", color: "var(--md-sys-color-on-primary-container)" }}>
+                      {initials}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>{profile?.name || "Profile"}</p>
+                  <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                    {profile?.role === "counselor" ? "Counselor profile" : "Student profile"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>{profile?.name || "Profile"}</p>
-                <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                  {profile?.role === "counselor" ? "Counselor profile" : "Student profile"}
-                </p>
+              <Input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)} />
+              <div className="flex items-center gap-3">
+                <Button type="button" onClick={handleUploadAvatar} disabled={isAvatarSubmitting || !avatarFile}>
+                  {isAvatarSubmitting ? "Uploading..." : "Upload Avatar"}
+                </Button>
+                <Button type="button" variant="outline" onClick={handleDeleteAvatar} disabled={isAvatarSubmitting || !avatarUrl}>
+                  Delete Avatar
+                </Button>
               </div>
             </div>
           </div>
 
           {previewUrl && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Photo Preview (Adjustable)</p>
-              <p className="text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                Drag to reposition or scroll to zoom.
-              </p>
-              <div className="flex flex-wrap items-end gap-6 rounded-lg border p-4" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-lowest)" }}>
-                <div className="flex flex-col items-center gap-2">
-                  <AvatarPicker ref={avatarPickerLargeRef} imageUrl={previewUrl} initials={initials} displaySize="small" />
-                  <span className="text-[11px]" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Profile avatar</span>
-                </div>
-                {profile?.role === "counselor" && (
-                  <div className="flex flex-col items-center gap-2">
-                    <AvatarPicker imageUrl={previewUrl} initials={initials} displaySize="large" />
-                    <span className="text-[11px] text-center" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Directory card</span>
+            <>
+              <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => { setAvatarFile(null); setPreviewUrl(null); }} />
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="w-full max-w-md rounded-2xl border p-6 shadow-xl" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-high)" }}>
+                  <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--md-sys-color-on-surface)" }}>Adjust Photo</h3>
+                  <p className="text-xs mb-4" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                    Drag to reposition or scroll to zoom.
+                  </p>
+                  <div className="flex flex-wrap items-end justify-center gap-6 mb-4">
+                    <div className="flex flex-col items-center gap-2">
+                      <AvatarPicker ref={avatarPickerLargeRef} imageUrl={previewUrl} initials={initials} displaySize="small" />
+                      <span className="text-[11px]" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Profile avatar</span>
+                    </div>
+                    {profile?.role === "counselor" && (
+                      <div className="flex flex-col items-center gap-2">
+                        <AvatarPicker imageUrl={previewUrl} initials={initials} displaySize="large" />
+                        <span className="text-[11px] text-center" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Directory card</span>
+                      </div>
+                    )}
                   </div>
-                )}
+                  <div className="flex justify-end gap-3">
+                    <Button variant="ghost" className="rounded-full" onClick={() => { setAvatarFile(null); setPreviewUrl(null); }}>Cancel</Button>
+                    <Button className="rounded-full" onClick={handleUploadAvatar} disabled={isAvatarSubmitting}>Upload</Button>
+                  </div>
+                </div>
               </div>
-            </div>
+            </>
           )}
-
-          <label className="block text-sm">
-            Display name
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your display name" maxLength={120} />
-          </label>
-          <label className="block text-sm">
-            Avatar image file
-            <Input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)} />
-          </label>
-          <div className="flex items-center gap-3">
-            <Button type="button" onClick={handleUploadAvatar} disabled={isAvatarSubmitting || !avatarFile}>
-              {isAvatarSubmitting ? "Uploading..." : "Upload Avatar"}
-            </Button>
-            <Button type="button" variant="outline" onClick={handleDeleteAvatar} disabled={isAvatarSubmitting || !avatarUrl}>
-              Delete Avatar
-            </Button>
-          </div>
 
           {profile?.role === "counselor" ? (
             <>
