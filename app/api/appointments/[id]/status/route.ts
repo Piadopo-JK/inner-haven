@@ -32,7 +32,7 @@ export async function PATCH(
   }
 
   try {
-    const updated = await bookingService.updateAppointmentStatus(id, body.status);
+    const updated = await bookingService.updateAppointmentStatus(id, body.status, "counselor");
     if (!updated) {
       return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
     }
