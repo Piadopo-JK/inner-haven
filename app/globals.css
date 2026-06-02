@@ -73,6 +73,31 @@
   --guidance-overlay-scrim: color-mix(in srgb, var(--md-sys-color-inverse-surface) 42%, transparent);
 
   --guidance-next-session-bg: var(--md-sys-color-primary);
+
+  /* Messaging-specific tokens */
+  --msg-sidebar-bg: color-mix(in srgb, var(--md-sys-color-primary) 6%, var(--md-sys-color-surface-container));
+  --msg-chat-bg: var(--md-sys-color-surface-container-lowest);
+  --msg-chat-header-bg: color-mix(in srgb, var(--md-sys-color-primary) 6%, var(--md-sys-color-surface-container));
+  --msg-input-bar-bg: var(--md-sys-color-surface-container-low);
+  --msg-input-bar-shadow: var(--md-sys-elevation-level2);
+
+  --msg-thread-active-bg: color-mix(in srgb, var(--md-sys-color-primary) 16%, var(--md-sys-color-surface-container-high));
+  --msg-thread-active-accent: var(--md-sys-color-primary);
+
+  --msg-inner-border: color-mix(in srgb, var(--md-sys-color-outline-variant) 40%, transparent);
+
+  --msg-label-color: var(--md-sys-color-on-surface-variant);
+  --msg-name-color: var(--md-sys-color-on-surface);
+  --msg-preview-color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 75%, var(--md-sys-color-surface-container));
+  --msg-timestamp-color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 55%, var(--md-sys-color-surface-container));
+
+  --msg-divider-line-color: var(--md-sys-color-outline-variant);
+  --msg-divider-text-color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 65%, var(--md-sys-color-surface-container));
+
+  --msg-bubble-peer-bg: var(--md-sys-color-surface-container-high);
+  --msg-bubble-peer-text: var(--md-sys-color-on-surface);
+  --msg-bubble-own-bg: var(--md-sys-color-primary);
+  --msg-bubble-own-text: var(--md-sys-color-on-primary);
 }
 
 @layer base {
@@ -260,6 +285,31 @@
   --md-sys-elevation-level1: 0 1px 2px rgba(0, 0, 0, 0.30);
   --md-sys-elevation-level2: 0 2px 6px rgba(0, 0, 0, 0.42);
   --md-sys-elevation-level3: 0 4px 8px rgba(0, 0, 0, 0.54);
+
+  /* Messaging-specific tokens (dark overrides) */
+  --msg-sidebar-bg: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface-container));
+  --msg-chat-bg: var(--md-sys-color-surface-container-lowest);
+  --msg-chat-header-bg: color-mix(in srgb, var(--md-sys-color-primary) 6%, var(--md-sys-color-surface-container));
+  --msg-input-bar-bg: var(--md-sys-color-surface-container-low);
+  --msg-input-bar-shadow: var(--md-sys-elevation-level2);
+
+  --msg-thread-active-bg: color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--md-sys-color-surface-container-high));
+  --msg-thread-active-accent: var(--md-sys-color-primary);
+
+  --msg-inner-border: color-mix(in srgb, var(--md-sys-color-outline-variant) 40%, transparent);
+
+  --msg-label-color: var(--md-sys-color-on-surface-variant);
+  --msg-name-color: var(--md-sys-color-on-surface);
+  --msg-preview-color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 75%, var(--md-sys-color-surface-container));
+  --msg-timestamp-color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 55%, var(--md-sys-color-surface-container));
+
+  --msg-divider-line-color: var(--md-sys-color-outline-variant);
+  --msg-divider-text-color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 65%, var(--md-sys-color-surface-container));
+
+  --msg-bubble-peer-bg: var(--md-sys-color-surface-container-high);
+  --msg-bubble-peer-text: var(--md-sys-color-on-surface);
+  --msg-bubble-own-bg: var(--md-sys-color-primary);
+  --msg-bubble-own-text: var(--md-sys-color-on-primary);
 }
 
 .surface-band {
@@ -267,21 +317,17 @@
   left: 50%;
 }
 
-.anonymous-hub-bg {
-  background:
-    radial-gradient(
-      ellipse at 0% 0%,
-      color-mix(in srgb, var(--md-sys-color-primary-container) 30%, transparent),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse at 100% 100%,
-      color-mix(in srgb, var(--md-sys-color-secondary-container) 15%, transparent),
-      transparent 70%
-    ),
-    var(--md-sys-color-surface);
+@keyframes vibrate {
+  0%        { transform: translateX(0) rotate(0deg); }
+  10%, 30%  { transform: translateX(-3px) rotate(-2deg); }
+  20%, 40%  { transform: translateX(3px) rotate(2deg); }
+  50%       { transform: translateX(-2px) rotate(-1deg); }
+  60%, 80%  { transform: translateX(2px) rotate(1deg); }
+  70%       { transform: translateX(-1px) rotate(0deg); }
+  90%       { transform: translateX(1px) rotate(0deg); }
+  100%      { transform: translateX(0); }
 }
 
-.dark .anonymous-hub-bg {
-  background: var(--md-sys-color-surface);
+.theme-btn-vibrating {
+  animation: vibrate 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 }

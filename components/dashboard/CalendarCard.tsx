@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { AppointmentDTO } from "@/lib/booking/contracts";
+import { cn } from "@/lib/utils";
 
 type CalendarCardProps = {
   appointments?: AppointmentDTO[];
@@ -50,15 +51,16 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
   }, [popupDate, month]);
 
   React.useEffect(() => {
-    if (!popupDate) return;
+    if (!popupDate && !date) return;
     function handleClick(e: MouseEvent) {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setPopupDate(null);
+        setDate(undefined);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [popupDate]);
+  }, [popupDate, date]);
 
   function handleSelect(d: Date | undefined) {
     setDate(d);
@@ -103,9 +105,15 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
         classNames={{
           month_grid: "w-full border-collapse",
           weekday: "text-[var(--md-sys-color-on-surface)] font-bold text-xs uppercase tracking-widest h-10",
-          day_button: "h-7 w-7 rounded-lg transition-all font-medium text-[var(--md-sys-color-on-surface)] bg-transparent hover:bg-[var(--md-sys-color-surface-container)]",
-          selected: "rounded-lg bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)] hover:text-[var(--md-sys-color-on-primary)]",
-          today: "rounded-lg bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] font-bold",
+          day_button: cn(
+            "mx-auto h-7 w-7 rounded-lg transition-all font-medium text-[var(--md-sys-color-on-surface)] bg-transparent",
+            "hover:bg-[var(--md-sys-color-surface-container)]",
+            "[.day-today_&]:bg-[var(--md-sys-color-primary-container)] [.day-today_&]:text-[var(--md-sys-color-on-primary-container)] [.day-today_&]:font-bold",
+            "[.day-selected_&]:bg-[var(--md-sys-color-primary)] [.day-selected_&]:text-[var(--md-sys-color-on-primary)]",
+            "[.day-selected_&]:hover:bg-[var(--md-sys-color-primary)] [.day-selected_&]:hover:text-[var(--md-sys-color-on-primary)]",
+          ),
+          selected: "day-selected",
+          today: "day-today",
           outside: "text-[var(--md-sys-color-on-surface-variant)] opacity-60",
         }}
         modifiers={{

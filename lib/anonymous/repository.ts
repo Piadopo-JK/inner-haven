@@ -266,7 +266,7 @@ export async function listStudentThreads(ownerAuthUserId: string): Promise<Stude
     };
   });
 
-  return { threads: summaries };
+  return { ownerAuthUserId, threads: summaries };
 }
 
 export async function markStudentThreadsSeen(ownerAuthUserId: string) {

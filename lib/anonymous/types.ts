@@ -16,6 +16,7 @@ export type AnonymousThreadSummary = {
 };
 
 export type StudentAnonymousThreads = {
+  ownerAuthUserId: string;
   threads: AnonymousThreadSummary[];
 };
 
