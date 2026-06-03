@@ -141,6 +141,7 @@ export default function AvailableCounselorsList({
             canMessage={canMessage}
             colorIndex={i}
             isOnline={onlineCounselorIds.has(counselor.counselor_id)}
+            priority={i === 0}
           />
         ))}
       </div>

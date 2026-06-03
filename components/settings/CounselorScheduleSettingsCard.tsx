@@ -17,6 +17,7 @@ type DayScheduleState = {
   start_time: string;
   end_time: string;
   slot_duration_minutes: number;
+  has_break: boolean;
   break_start_time: string;
   break_end_time: string;
 };
@@ -30,6 +31,7 @@ function defaultDaySchedule(day_of_week: number): DayScheduleState {
     start_time: "09:00",
     end_time: "17:00",
     slot_duration_minutes: 60,
+    has_break: day_of_week >= 1 && day_of_week <= 5,
     break_start_time: "12:00",
     break_end_time: "13:00",
   };
@@ -42,14 +44,16 @@ function toStateMap(rules: CounselorScheduleRuleDTO[]) {
   }
   for (const rule of rules) {
     const firstBreak = rule.breaks?.[0];
+    const hasBreak = Boolean(firstBreak?.start_time && firstBreak?.end_time);
     base.set(rule.day_of_week, {
       day_of_week: rule.day_of_week,
       is_active: rule.is_active,
       start_time: rule.start_time,
       end_time: rule.end_time,
       slot_duration_minutes: rule.slot_duration_minutes,
-      break_start_time: firstBreak?.start_time ?? "",
-      break_end_time: firstBreak?.end_time ?? "",
+      has_break: hasBreak,
+      break_start_time: firstBreak?.start_time ?? "12:00",
+      break_end_time: firstBreak?.end_time ?? "13:00",
     });
   }
   return Array.from(base.values()).sort((a, b) => a.day_of_week - b.day_of_week);
@@ -88,7 +92,7 @@ export default function CounselorScheduleSettingsCard() {
         end_time: d.end_time,
         slot_duration_minutes: Number(d.slot_duration_minutes),
         breaks:
-          d.break_start_time && d.break_end_time
+          d.has_break && d.break_start_time && d.break_end_time
             ? [{ start_time: d.break_start_time, end_time: d.break_end_time }]
             : [],
       }));
@@ -143,16 +147,29 @@ export default function CounselorScheduleSettingsCard() {
                   <Input type="number" min={15} max={180} step={5} value={day.slot_duration_minutes} onChange={(e) => updateDay(day.day_of_week, { slot_duration_minutes: Number(e.target.value) || 60 })} disabled={!day.is_active} />
                 </label>
               </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <label className="text-sm">
-                  Break Start (optional)
-                  <Input type="time" value={day.break_start_time} onChange={(e) => updateDay(day.day_of_week, { break_start_time: e.target.value })} disabled={!day.is_active} />
-                </label>
-                <label className="text-sm">
-                  Break End (optional)
-                  <Input type="time" value={day.break_end_time} onChange={(e) => updateDay(day.day_of_week, { break_end_time: e.target.value })} disabled={!day.is_active} />
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={day.has_break}
+                    onChange={(e) => updateDay(day.day_of_week, { has_break: e.target.checked })}
+                    disabled={!day.is_active}
+                  />
+                  Include break window
                 </label>
               </div>
+              {day.has_break && (
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <label className="text-sm">
+                    Break Start
+                    <Input type="time" value={day.break_start_time} onChange={(e) => updateDay(day.day_of_week, { break_start_time: e.target.value })} disabled={!day.is_active} />
+                  </label>
+                  <label className="text-sm">
+                    Break End
+                    <Input type="time" value={day.break_end_time} onChange={(e) => updateDay(day.day_of_week, { break_end_time: e.target.value })} disabled={!day.is_active} />
+                  </label>
+                </div>
+              )}
             </article>
           ))}
         </div>

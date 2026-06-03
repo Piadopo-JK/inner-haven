@@ -5,6 +5,16 @@ import { useMemo } from "react";
 import { AvailabilityEmptyState, AvailabilitySlotDTO } from "@/lib/booking/contracts";
 import { cn } from "@/lib/utils";
 
+function formatSlotTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 type AvailableSlotsGridProps = {
   slots: AvailabilitySlotDTO[];
   selectedSlot?: string;
@@ -92,7 +102,7 @@ export default function AvailableSlotsGrid({
                       : "opacity-50 cursor-not-allowed bg-[var(--md-sys-color-surface-container)] border-transparent text-[var(--md-sys-color-on-surface-variant)]"
                 )}
               >
-                {slot.appointment_time}
+                {formatSlotTime(slot.appointment_time)}
               </button>
             );
           })}

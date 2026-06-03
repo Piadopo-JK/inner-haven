@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Trash2, Info } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Mail, Trash2, Info } from "lucide-react";
 
 import AnonymousChat from "@/components/anonymous/AnonymousChat";
 import ThreadList from "@/components/anonymous/ThreadList";
@@ -19,6 +19,7 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
   const [detachError, setDetachError] = useState("");
   const [showTrash, setShowTrash] = useState(false);
+  const [shaking, setShaking] = useState(false);
   const { data: threads = [], isLoading: isLoadingQueue } = useAnonymousCounselorThreads();
   const { mutateAsync: detachThread, isPending: isDetaching } = useDetachThreadByCounselor();
 
@@ -144,7 +145,7 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <h1 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
-                {showTrash ? "Trash" : "Anonymous Queue"}
+                {showTrash ? "Trash" : "Chat"}
               </h1>
               <span className="relative group">
                 <Info className="h-3.5 w-3.5 cursor-help" style={{ color: "var(--md-sys-color-on-surface-variant)" }} />
@@ -162,12 +163,20 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
             </div>
             <button
               type="button"
-              onClick={() => { setShowTrash((p) => !p); setSelectedThreadId(undefined); }}
+              onClick={() => {
+                if (shaking) return;
+                setShaking(true);
+                setShowTrash((p) => !p);
+                setSelectedThreadId(undefined);
+                setTimeout(() => setShaking(false), 420);
+              }}
               className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-surface)_10%,transparent)]"
               style={{ color: showTrash ? "var(--md-sys-color-error)" : "var(--md-sys-color-on-surface-variant)" }}
               aria-label={showTrash ? "Back to queue" : "Trash"}
             >
-              <Trash2 className="h-5 w-5" />
+              <span className={shaking ? "theme-btn-vibrating" : ""} style={{ display: "flex" }}>
+                {showTrash ? <Mail className="h-5 w-5" /> : <Trash2 className="h-5 w-5" />}
+              </span>
             </button>
           </div>
           <ThreadList
@@ -253,7 +262,7 @@ export default function CounselorQueue({ initialThreadId }: { initialThreadId?: 
           >
             <div className="mb-3 flex items-center justify-between">
               <h1 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
-                {showTrash ? "Trash" : "Anonymous Queue"}
+                {showTrash ? "Trash" : "Chat"}
               </h1>
               <button
                 type="button"

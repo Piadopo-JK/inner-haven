@@ -15,20 +15,22 @@ import {
   DashboardSidebarSkeleton,
   DashboardStatsRowSkeleton,
 } from "@/components/dashboard/DashboardRouteSkeletons";
-import { useUnreadCount } from "@/lib/query/hooks/useUnreadCount";
+import { useAnonymousUnreadCount } from "@/lib/query/hooks/useAnonymousUnreadCount";
 import { useStudents, EMPTY_STUDENTS } from "@/lib/query/hooks/useStudents";
 import { useAppointments } from "@/lib/query/hooks/useAppointments";
 
 type CounselorDashboardClientProps = {
   counselorName: string;
+  resolvedCounselorId: string;
 };
 
 export default function CounselorDashboardClient({
   counselorName,
+  resolvedCounselorId,
 }: CounselorDashboardClientProps) {
   const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
   const { isLoading: appointmentsLoading } = useAppointments("counselor");
-  const { data: unreadData, isLoading: unreadLoading } = useUnreadCount("counselor");
+  const { data: unreadData, isLoading: unreadLoading } = useAnonymousUnreadCount("counselor");
   const { data: students = EMPTY_STUDENTS, isLoading: studentsLoading } = useStudents();
 
   const statsLoading = appointmentsLoading || unreadLoading;
@@ -39,11 +41,12 @@ export default function CounselorDashboardClient({
       <CounselorWelcomeHeader name={counselorName} />
 
       {statsLoading ? (
-        <DashboardStatsRowSkeleton />
+        <DashboardStatsRowSkeleton compact />
       ) : (
         <CounselorDashboardStatsSection
           todayIso={todayIso}
           unreadMessages={unreadData?.count ?? 0}
+          resolvedCounselorId={resolvedCounselorId}
         />
       )}
 
