@@ -16,24 +16,24 @@ import {
   DashboardStatsRowSkeleton,
 } from "@/components/dashboard/DashboardRouteSkeletons";
 import BookingFAB from "@/components/dashboard/BookingFAB";
-import { useUnreadCount } from "@/lib/query/hooks/useUnreadCount";
+import { useAnonymousUnreadCount } from "@/lib/query/hooks/useAnonymousUnreadCount";
 import { useCounselors, EMPTY_COUNSELORS } from "@/lib/query/hooks/useCounselors";
 import { useAppointments } from "@/lib/query/hooks/useAppointments";
 
 type StudentDashboardClientProps = {
   studentId: string;
+  resolvedStudentId: string;
   userName: string;
-  resolvedUserId?: string;
 };
 
 export default function StudentDashboardClient({
   studentId,
+  resolvedStudentId,
   userName,
-  resolvedUserId,
 }: StudentDashboardClientProps) {
   const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
   const { isLoading: appointmentsLoading } = useAppointments("student");
-  const { data: unreadData, isLoading: unreadLoading } = useUnreadCount("student");
+  const { data: unreadData, isLoading: unreadLoading } = useAnonymousUnreadCount("student");
   const { data: counselors = EMPTY_COUNSELORS, isLoading: counselorsLoading } = useCounselors();
 
   const statsLoading = appointmentsLoading || unreadLoading;
@@ -48,7 +48,7 @@ export default function StudentDashboardClient({
       ) : (
         <StudentDashboardStatsSection
           userId={studentId}
-          resolvedUserId={resolvedUserId}
+          resolvedUserId={resolvedStudentId}
           todayIso={todayIso}
           unreadMessages={unreadData?.count ?? 0}
         />

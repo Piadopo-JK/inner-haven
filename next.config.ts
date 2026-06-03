@@ -6,6 +6,7 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 const nextConfig: NextConfig = {
   images: {
+    minimumCacheTTL: 86400,
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
       ...(supabaseHost

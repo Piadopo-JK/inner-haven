@@ -11,6 +11,16 @@ type CalendarCardProps = {
   appointments?: AppointmentDTO[];
 };
 
+function formatDisplayTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
   const [month, setMonth] = React.useState<Date>(new Date());
@@ -159,7 +169,7 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
                         : "var(--md-sys-color-on-tertiary-container)",
                     }}
                   >
-                    {a.appointment_time.slice(0, 5)}
+                    {formatDisplayTime(a.appointment_time)}
                   </span>
                   <span className="flex-1 text-xs truncate" style={{ color: "var(--md-sys-color-on-surface)" }}>
                     {a.reason_preview || a.reason}

@@ -20,6 +20,7 @@ export type CounselorDirectoryItemDTO = {
   office_room: string;
   about?: string;
   avatar_url?: string;
+  hero_card_url?: string;
 };
 
 export type StudentDirectoryItemDTO = {

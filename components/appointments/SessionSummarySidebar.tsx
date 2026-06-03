@@ -4,6 +4,16 @@ import { Calendar, Clock, Video, User, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SessionMode } from "@/lib/booking/contracts";
 
+function formatDisplayTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 type SummaryItemProps = {
   icon: React.ReactNode;
   label: string;
@@ -57,7 +67,7 @@ export default function SessionSummarySidebar({ date, time, mode, counselorName,
           <SummaryItem 
             icon={<Clock className="w-5 h-5" />} 
             label="Time" 
-            value={time || 'Not selected'} 
+            value={time ? formatDisplayTime(time) : 'Not selected'} 
             subvalue={time ? '(60 min)' : undefined}
           />
           <SummaryItem 
