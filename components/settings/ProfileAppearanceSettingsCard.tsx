@@ -9,6 +9,7 @@ import { Md3Message } from "@/components/ui/md3-message";
 import { AvatarPicker, type AvatarPickerHandle } from "@/components/ui/avatar-picker";
 import {
   useDeleteProfileAvatar,
+  useDeleteProfileHeroCard,
   useProfile,
   useSaveProfile,
   useUploadProfileAvatar,
@@ -19,10 +20,13 @@ export default function ProfileAppearanceSettingsCard() {
   const { mutateAsync: saveProfile, isPending: isSaving } = useSaveProfile();
   const { mutateAsync: uploadProfileAvatar, isPending: isUploadingAvatar } = useUploadProfileAvatar();
   const { mutateAsync: deleteProfileAvatar, isPending: isDeletingAvatar } = useDeleteProfileAvatar();
+  const { mutateAsync: deleteProfileHeroCard, isPending: isDeletingHeroCard } = useDeleteProfileHeroCard();
 
   const [avatarUrl, setAvatarUrl] = React.useState("");
+  const [heroCardUrl, setHeroCardUrl] = React.useState<string | null>(null);
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const avatarPickerSmallRef = React.useRef<AvatarPickerHandle>(null);
   const avatarPickerLargeRef = React.useRef<AvatarPickerHandle>(null);
 
   const [name, setName] = React.useState("");
@@ -31,12 +35,24 @@ export default function ProfileAppearanceSettingsCard() {
   const [officeRoom, setOfficeRoom] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
-  const isAvatarSubmitting = isUploadingAvatar || isDeletingAvatar;
+  const isAvatarSubmitting = isUploadingAvatar || isDeletingAvatar || isDeletingHeroCard;
+  const displayNameInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (window.location.hash === "#display-name" && displayNameInputRef.current) {
+      const timer = setTimeout(() => {
+        displayNameInputRef.current?.focus();
+        displayNameInputRef.current?.select();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (!profile) return;
     setName(profile.name ?? "");
     setAvatarUrl(profile.avatar_url ?? "");
+    setHeroCardUrl(profile.hero_card_url ?? null);
     setAbout(profile.about ?? "");
     setSpecialization(profile.specialization ?? "");
     setOfficeRoom(profile.office_room ?? "");
@@ -76,18 +92,30 @@ export default function ProfileAppearanceSettingsCard() {
     setError(null);
     setSuccess(null);
     try {
-      let fileToUpload: File = avatarFile;
-      if (previewUrl && avatarPickerLargeRef.current) {
-        const blob = await avatarPickerLargeRef.current.getAdjustedBlob();
-        if (blob) fileToUpload = new File([blob], avatarFile.name, { type: "image/jpeg" });
+      let avatarFileToUpload: File = avatarFile;
+      if (previewUrl && avatarPickerSmallRef.current) {
+        const blob = await avatarPickerSmallRef.current.getAdjustedBlob();
+        if (blob) avatarFileToUpload = new File([blob], avatarFile.name, { type: "image/jpeg" });
       }
-      const payload = await uploadProfileAvatar(fileToUpload);
+
+      let heroCardFileToUpload: File | undefined;
+      if (previewUrl && profile?.role === "counselor" && avatarPickerLargeRef.current) {
+        const blob = await avatarPickerLargeRef.current.getAdjustedBlob();
+        if (blob) heroCardFileToUpload = new File([blob], `hero-${avatarFile.name}`, { type: "image/jpeg" });
+      }
+
+      const payload = await uploadProfileAvatar({
+        avatarFile: avatarFileToUpload,
+        heroCardFile: heroCardFileToUpload,
+      });
+
       const nextAvatarUrl = payload.avatar_url ?? "";
       setAvatarUrl(nextAvatarUrl);
+      if (payload.hero_card_url) setHeroCardUrl(payload.hero_card_url);
       setAvatarFile(null);
-      setSuccess("Avatar uploaded.");
+      setSuccess("Image uploaded.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to upload avatar.");
+      setError(err instanceof Error ? err.message : "Unable to upload image.");
     }
   }
 
@@ -101,6 +129,18 @@ export default function ProfileAppearanceSettingsCard() {
       setSuccess("Avatar deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to delete avatar.");
+    }
+  }
+
+  async function handleDeleteHeroCard() {
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteProfileHeroCard();
+      setHeroCardUrl(null);
+      setSuccess("Hero card deleted.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete hero card.");
     }
   }
 
@@ -121,7 +161,7 @@ export default function ProfileAppearanceSettingsCard() {
         <div className="mt-4 space-y-4">
           <label className="block text-sm">
             Display name
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your display name" maxLength={120} />
+            <Input ref={displayNameInputRef} id="display-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your display name" maxLength={120} />
           </label>
 
           <div className="space-y-2">
@@ -145,13 +185,18 @@ export default function ProfileAppearanceSettingsCard() {
                 </div>
               </div>
               <Input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)} />
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Button type="button" onClick={handleUploadAvatar} disabled={isAvatarSubmitting || !avatarFile}>
                   {isAvatarSubmitting ? "Uploading..." : "Upload Avatar"}
                 </Button>
                 <Button type="button" variant="outline" onClick={handleDeleteAvatar} disabled={isAvatarSubmitting || !avatarUrl}>
                   Delete Avatar
                 </Button>
+                {profile?.role === "counselor" && heroCardUrl && (
+                  <Button type="button" variant="outline" onClick={handleDeleteHeroCard} disabled={isAvatarSubmitting}>
+                    Delete Hero Card
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -163,16 +208,16 @@ export default function ProfileAppearanceSettingsCard() {
                 <div className="w-full max-w-md rounded-2xl border p-6 shadow-xl" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-high)" }}>
                   <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--md-sys-color-on-surface)" }}>Adjust Photo</h3>
                   <p className="text-xs mb-4" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                    Drag to reposition or scroll to zoom.
+                    Drag to reposition or scroll to zoom. Each crop adjusts independently.
                   </p>
                   <div className="flex flex-wrap items-end justify-center gap-6 mb-4">
                     <div className="flex flex-col items-center gap-2">
-                      <AvatarPicker ref={avatarPickerLargeRef} imageUrl={previewUrl} initials={initials} displaySize="small" />
+                      <AvatarPicker ref={avatarPickerSmallRef} imageUrl={previewUrl} initials={initials} displaySize="small" />
                       <span className="text-[11px]" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Profile avatar</span>
                     </div>
                     {profile?.role === "counselor" && (
                       <div className="flex flex-col items-center gap-2">
-                        <AvatarPicker imageUrl={previewUrl} initials={initials} displaySize="large" />
+                        <AvatarPicker ref={avatarPickerLargeRef} imageUrl={previewUrl} initials={initials} displaySize="large" />
                         <span className="text-[11px] text-center" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Directory card</span>
                       </div>
                     )}

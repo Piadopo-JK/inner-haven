@@ -16,9 +16,14 @@ type SaveProfileInput = {
   officeRoom: string;
 };
 
+type UploadAvatarInput = {
+  avatarFile: File;
+  heroCardFile?: File;
+};
+
 type UploadAvatarResponse = {
   avatar_url: string;
-  path: string;
+  hero_card_url?: string | null;
 };
 
 function normalizeString(value: string) {
@@ -109,9 +114,12 @@ export function useUploadProfileAvatar() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (input: UploadAvatarInput) => {
       const formData = new FormData();
-      formData.set("avatar", file);
+      formData.set("avatar", input.avatarFile);
+      if (input.heroCardFile) {
+        formData.set("hero_card", input.heroCardFile);
+      }
 
       const response = await fetch("/api/settings/avatar", {
         method: "POST",
@@ -128,13 +136,20 @@ export function useUploadProfileAvatar() {
       return (await response.json()) as UploadAvatarResponse;
     },
 
-    onSuccess: ({ avatar_url }) => {
+    onSuccess: ({ avatar_url, hero_card_url }) => {
       queryClient.setQueryData<ProfileSettingsCachePayload | undefined>(
         queryKeys.profile(),
-        (current) =>
-          current
-            ? { ...current, avatar_url: avatar_url || null }
-            : current,
+        (current) => {
+          if (!current) return current;
+          const updated: ProfileSettingsCachePayload = {
+            ...current,
+            avatar_url: avatar_url || null,
+          };
+          if (hero_card_url !== undefined) {
+            updated.hero_card_url = hero_card_url || null;
+          }
+          return updated;
+        },
       );
     },
   });
@@ -159,6 +174,30 @@ export function useDeleteProfileAvatar() {
       queryClient.setQueryData<ProfileSettingsCachePayload | undefined>(
         queryKeys.profile(),
         (current) => (current ? { ...current, avatar_url: null } : current),
+      );
+    },
+  });
+}
+
+export function useDeleteProfileHeroCard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/settings/avatar?type=hero_card", { method: "DELETE" });
+
+      if (!response.ok) {
+        throw await readProfileMutationError(
+          response,
+          "Unable to delete hero card.",
+        );
+      }
+    },
+
+    onSuccess: () => {
+      queryClient.setQueryData<ProfileSettingsCachePayload | undefined>(
+        queryKeys.profile(),
+        (current) => (current ? { ...current, hero_card_url: null } : current),
       );
     },
   });

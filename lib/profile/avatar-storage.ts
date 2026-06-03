@@ -44,10 +44,18 @@ export function buildAvatarPath(role: "student" | "counselor", authUserId: strin
   return `${role}/${authUserId}/${stamp}-${baseName}.${extension}`;
 }
 
+export function buildHeroCardPath(role: "student" | "counselor", authUserId: string, file: File) {
+  const extension = inferExtension(file.name, file.type);
+  const rawName = sanitizeFileName(file.name || "hero-card");
+  const baseName = rawName.replace(/\.[a-zA-Z0-9]+$/, "") || "hero-card";
+  const stamp = Date.now();
+  return `${role}/${authUserId}/hero-${stamp}-${baseName}.${extension}`;
+}
+
 export async function uploadAvatarObject(path: string, file: File): Promise<AvatarUploadResult> {
   const supabase = createServiceClient();
   const { error } = await supabase.storage.from(AVATAR_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+    cacheControl: "31536000",
     upsert: true,
     contentType: file.type,
   });

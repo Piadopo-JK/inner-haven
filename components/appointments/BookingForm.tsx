@@ -59,6 +59,16 @@ function parsePrefilledTime(value: string | null): string {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : "";
 }
 
+function formatTime12h(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 export default function BookingForm({ initialAppointment }: BookingFormProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -215,6 +225,12 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
       return;
     }
 
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 10) {
+      setError("Please state your concern.");
+      return;
+    }
+
     setError("");
     setSuccess("");
     setIsRedirectingAfterConfirm(true);
@@ -225,7 +241,7 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
         counselorId: selectedCounselorId,
         appointmentDate: formatDateOnly(selectedDate),
         appointmentTime: selectedTime,
-        reason: reason.trim(),
+        reason: trimmedReason,
         mode: sessionMode,
       });
 
@@ -328,10 +344,10 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                   />
                   {scheduleSummary && scheduleSummary.source !== "none" ? (
                     <p className="mt-4 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                      Schedule: {scheduleSummary.start_time}-{scheduleSummary.end_time}{" "}
+                      Schedule: {formatTime12h(scheduleSummary.start_time)}–{formatTime12h(scheduleSummary.end_time)}{" "}
                       ({scheduleSummary.slot_duration_minutes} min slots)
                       {scheduleSummary.breaks.length > 0
-                        ? `, break ${scheduleSummary.breaks[0].start_time}-${scheduleSummary.breaks[0].end_time}`
+                        ? `, break ${formatTime12h(scheduleSummary.breaks[0].start_time)}–${formatTime12h(scheduleSummary.breaks[0].end_time)}`
                         : ""}
                     </p>
                   ) : null}
@@ -351,19 +367,33 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
               <SessionFormatSelection selectedMode={sessionMode} onSelect={setSessionMode} />
 
               <div className="flex flex-col gap-4">
-                <h3 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">State your concern</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">
+                    State your concern
+                    <span className="ml-1 text-sm font-normal text-[var(--md-sys-color-error)]">*</span>
+                  </h3>
+                  <span className={`text-xs font-medium ${reason.trim().length < 10 && reason.length > 0 ? "text-[var(--md-sys-color-error)]" : "text-[var(--md-sys-color-on-surface-variant)]"}`}>
+                    {reason.length}/250
+                  </span>
+                </div>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder={`Tell ${selectedCounselor?.name.split(" ")[0] || "us"} what's on your mind...`}
+                  minLength={10}
                   maxLength={250}
-                  className="w-full min-h-[150px] p-6 rounded-3xl bg-[var(--md-sys-color-surface-container-low)] border-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] placeholder:opacity-50"
+                  required
+                  className={`w-full min-h-[150px] p-6 rounded-3xl bg-[var(--md-sys-color-surface-container-low)] border-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] placeholder:opacity-50 ${reason.trim().length > 0 && reason.trim().length < 10 ? "ring-2 ring-[var(--md-sys-color-error)]" : ""}`}
                 />
+                {reason.trim().length > 0 && reason.trim().length < 10 && (
+                  <p className="text-xs font-medium text-[var(--md-sys-color-error)] -mt-2">
+                    Minimum 10 characters required ({10 - reason.trim().length} more)
+                  </p>
+                )}
               </div>
             </>
           )}
 
-          {error && <Md3Message tone="error">{error}</Md3Message>}
           {success && <Md3Message tone="success">{success}</Md3Message>}
         </div>
 
@@ -377,6 +407,38 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
           confirmLabel={initialAppointment ? "Save Changes" : "Confirm Session"}
         />
       </div>
+
+      {error && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => setError("")} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setError(""); }}>
+            <div
+              className="w-full max-w-sm rounded-2xl border p-6 text-center shadow-xl"
+              style={{
+                borderColor: "var(--md-sys-color-outline-variant)",
+                background: "var(--md-sys-color-surface-container-high)",
+              }}
+            >
+              <div
+                className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+                style={{ background: "var(--md-sys-color-error-container)" }}
+              >
+                <span className="text-xl font-bold" style={{ color: "var(--md-sys-color-error)" }}>!</span>
+              </div>
+              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                {error}
+              </p>
+              <Button
+                onClick={() => setError("")}
+                className="mt-4 rounded-xl"
+                style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

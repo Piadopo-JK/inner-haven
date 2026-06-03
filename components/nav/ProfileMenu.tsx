@@ -1,11 +1,15 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
 import { useProfile } from "@/lib/query/hooks/useProfile";
 
 export default function ProfileMenu() {
   const { data: profile } = useProfile();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const avatarUrl = profile?.avatar_url ?? null;
   const initials = profile?.name
@@ -16,6 +20,20 @@ export default function ProfileMenu() {
         .map((p: string) => p.charAt(0).toUpperCase())
         .join("") || "U"
     : "U";
+
+  if (!mounted) {
+    return (
+      <div
+        className="relative rounded-full h-10 w-10 overflow-hidden flex items-center justify-center"
+        style={{
+          border: "2px solid var(--md-sys-color-outline-variant)",
+          boxShadow: "0 0 0 2px var(--md-sys-color-surface)",
+          background: "var(--md-sys-color-surface-container-high)",
+        }}
+        aria-hidden="true"
+      />
+    );
+  }
 
   const avatarContent = avatarUrl ? (
     <Image

@@ -31,7 +31,7 @@ export const AvatarPicker = forwardRef<AvatarPickerHandle, AvatarPickerProps>(
     },
     ref,
   ) {
-    const editorRef = useRef<typeof AvatarEditorLib.prototype>(null);
+    const editorRef = useRef<typeof AvatarEditorLib | null>(null);
     const isSizeSmall = displaySize === "small";
     const width  = isSizeSmall ? SMALL_W : LARGE_W;
     const height = isSizeSmall ? SMALL_H : LARGE_H;
@@ -42,7 +42,7 @@ export const AvatarPicker = forwardRef<AvatarPickerHandle, AvatarPickerProps>(
       getAdjustedBlob: async () => {
         const editor = editorRef.current;
         if (!editor || !imageUrl) return null;
-        const canvas = editor.getImageScaledToCanvas();
+        const canvas = editor.getImage();
         return new Promise<Blob | null>((resolve) => {
           canvas.toBlob((blob: Blob | null) => resolve(blob), "image/jpeg", 0.95);
         });

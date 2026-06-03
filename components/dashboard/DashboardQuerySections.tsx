@@ -7,7 +7,6 @@ import CounselorStatsRow from "@/components/counselor/CounselorStatsRow";
 import CalendarCard from "@/components/dashboard/CalendarCard";
 import CounselorListCard from "@/components/dashboard/CounselorListCard";
 import NextSessionCard from "@/components/dashboard/NextSessionCard";
-import RecentMessagesCard from "@/components/dashboard/RecentMessagesCard";
 import StudentStatsRow from "@/components/dashboard/StudentStatsRow";
 import type {
   AppointmentDTO,
@@ -47,9 +46,11 @@ const EMPTY_STUDENT_DASHBOARD: StudentDashboardOverview = {
 export function CounselorDashboardStatsSection({
   todayIso,
   unreadMessages,
+  resolvedCounselorId,
 }: {
   todayIso: string;
   unreadMessages: number;
+  resolvedCounselorId: string;
 }) {
   useAppointmentsRealtimeSync("counselor");
 
@@ -69,6 +70,7 @@ export function CounselorDashboardStatsSection({
       upcomingApproved={dashboardAppointments.upcomingApprovedCount}
       completed={dashboardAppointments.completedCount}
       messages={unreadMessages}
+      resolvedCounselorId={resolvedCounselorId}
     />
   );
 }
@@ -126,7 +128,7 @@ export function StudentDashboardStatsSection({
   unreadMessages,
 }: {
   userId: string;
-  resolvedUserId?: string;
+  resolvedUserId: string;
   todayIso: string;
   unreadMessages: number;
 }) {
@@ -202,7 +204,6 @@ export function StudentDashboardSidebarSection({
     <div className="flex flex-col gap-4">
       <CalendarCard appointments={appointments} />
       <CounselorListCard counselors={counselors} />
-      <RecentMessagesCard />
     </div>
   );
 }

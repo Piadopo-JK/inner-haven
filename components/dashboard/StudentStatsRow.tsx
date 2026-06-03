@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { NotificationDTO, SessionRole } from "@/lib/booking/contracts";
+import type { SessionRole } from "@/lib/booking/contracts";
 
 const PRESENCE_TOPIC = "presence:counselors";
 
@@ -41,11 +40,10 @@ function StatCard({ label, value, sublabel }: StatCardProps) {
 export type StudentStatsRowProps = {
   role: SessionRole;
   userId: string;
-  resolvedUserId?: string;
+  resolvedUserId: string;
   upcoming: number;
   messages: number;
   counselors: number;
-  counselorIds?: string[];
   completed: number;
 };
 
@@ -58,33 +56,16 @@ export default function StudentStatsRow({
   counselors,
   completed,
 }: StudentStatsRowProps) {
-  const queryClient = useQueryClient();
-  const notificationsQueryKey = useMemo(
-    () => ["notifications", role, userId] as const,
-    [role, userId],
-  );
   const [onlineCounselors, setOnlineCounselors] = useState(counselors);
-
-  const { data: notifications = [] } = useQuery({
-    queryKey: notificationsQueryKey,
-    queryFn: async () => {
-      const params = new URLSearchParams({ role, user_id: userId });
-      const response = await fetch(`/api/notifications?${params.toString()}`, {
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to load notifications.");
-      }
-
-      return (await response.json()) as NotificationDTO[];
-    },
-    staleTime: 30_000,
-  });
+  const [liveMessages, setLiveMessages] = useState(messages);
 
   useEffect(() => {
     setOnlineCounselors(counselors);
   }, [counselors]);
+
+  useEffect(() => {
+    setLiveMessages(messages);
+  }, [messages]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -119,14 +100,48 @@ export default function StudentStatsRow({
     };
   }, []);
 
-  const unreadMessages = notifications.length
-    ? notifications.reduce((count, notification) => count + (notification.read ? 0 : 1), 0)
-    : messages;
+  // Realtime anonymous message notification count
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`anon-notifications-rt-${resolvedUserId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${resolvedUserId}` },
+        (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new;
+          if (
+            row?.type === "session_notes" &&
+            row?.anonymous_thread_id != null
+          ) {
+            setLiveMessages((prev) => prev + 1);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${resolvedUserId}` },
+        (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new;
+          if (
+            row?.type === "session_notes" &&
+            row?.anonymous_thread_id != null
+          ) {
+            setLiveMessages((prev) => Math.max(0, prev - 1));
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [resolvedUserId]);
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 py-1">
       <StatCard label="Upcoming" value={upcoming} sublabel="Scheduled" />
-      <StatCard label="Messages" value={unreadMessages} sublabel="Unread" />
+      <StatCard label="Messages" value={liveMessages} sublabel="Unread" />
       <StatCard label="Counselors" value={onlineCounselors} sublabel="Online" />
       <StatCard label="Completed" value={completed} sublabel="Milestones" />
     </div>
