@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import AvatarEditorLib from "react-avatar-editor";
+import AvatarEditorLib, { type AvatarEditorRef } from "react-avatar-editor";
 
 export type AvatarPickerHandle = {
   getAdjustedBlob: () => Promise<Blob | null>;
@@ -31,7 +31,7 @@ export const AvatarPicker = forwardRef<AvatarPickerHandle, AvatarPickerProps>(
     },
     ref,
   ) {
-    const editorRef = useRef<typeof AvatarEditorLib | null>(null);
+    const editorRef = useRef<AvatarEditorRef | null>(null);
     const isSizeSmall = displaySize === "small";
     const width  = isSizeSmall ? SMALL_W : LARGE_W;
     const height = isSizeSmall ? SMALL_H : LARGE_H;
