@@ -29,6 +29,7 @@ export {
   selectCounselorDashboardAppointments,
   selectStudentDashboardAppointments,
   selectStudentDashboardOverview,
+  applyCompletedFilters,
 } from "@/lib/query/appointment-selectors";
 export { useCancelStudentAppointment } from "@/lib/query/hooks/useStudentAppointmentActions";
 

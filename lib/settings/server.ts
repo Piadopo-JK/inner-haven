@@ -19,7 +19,7 @@ export async function loadProfileSettings(
   if (sessionUser.role === "counselor") {
     const { data, error } = await supabase
       .from("counselors")
-      .select("name, avatar_url, about, specialization, office_room")
+      .select("name, avatar_url, hero_card_url, about, specialization, office_room")
       .eq("auth_user_id", sessionUser.userId)
       .maybeSingle();
 
@@ -35,6 +35,7 @@ export async function loadProfileSettings(
       role: "counselor",
       name: data.name,
       avatar_url: data.avatar_url,
+      hero_card_url: data.hero_card_url,
       about: data.about,
       specialization: data.specialization,
       office_room: data.office_room,

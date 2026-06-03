@@ -21,6 +21,16 @@ import {
 
 const PRESENCE_TOPIC = "presence:counselors";
 
+function formatDisplayTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 type NextSessionCardProps = {
   appointment?: AppointmentDTO;
   participantName?: string;
@@ -178,7 +188,7 @@ export default function NextSessionCard({
         </h2>
         <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
           <p className="text-white opacity-80 text-base">
-            {participantName || "Your Participant"} • {dateStr} at {appointment.appointment_time}
+            {participantName || "Your Participant"} • {dateStr} at {formatDisplayTime(appointment.appointment_time)}
           </p>
           {showParticipantOnlineStatus && isCounselorOnline ? (
             <span

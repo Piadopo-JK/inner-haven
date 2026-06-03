@@ -11,6 +11,7 @@ export type ProfileSettingsCachePayload = {
   role: "student" | "counselor";
   name: string;
   avatar_url: string | null;
+  hero_card_url?: string | null;
   about?: string | null;
   specialization?: string | null;
   office_room?: string | null;
@@ -32,7 +33,7 @@ export type GoogleIntegrationStatusPayload = {
 export const APPOINTMENTS_STALE_MS = Infinity; // Realtime is the source of truth
 export const APPOINTMENT_DETAILS_STALE_MS = 60_000;
 export const PROFILE_STALE_MS = 15 * 60_000;
-export const SCHEDULE_STALE_MS = 15 * 60_000;
+export const SCHEDULE_STALE_MS = 0; // Always refetch on mount to stay in sync with DB
 export const NOTES_STALE_MS = 60_000;
 export const AVAILABILITY_STALE_MS = 15 * 60_000;
 export const COUNSELORS_STALE_MS = 15 * 60_000;
@@ -52,6 +53,8 @@ export const queryKeys = {
   counselors: () => ["counselors"] as const,
   students: () => ["students"] as const,
   unreadCount: (role: SessionRole) => ["unread-count", role] as const,
+  anonymousUnreadCount: (role: SessionRole) =>
+    ["anonymous-unread-count", role] as const,
   availabilityRoot: () => ["availability"] as const,
   availabilityByCounselor: (counselorId: string) =>
     ["availability", counselorId] as const,
@@ -136,12 +139,27 @@ export function unreadCountQueryOptions(role: SessionRole) {
   });
 }
 
+export function fetchAnonymousUnreadCount() {
+  return fetchJson<{ count: number }>(
+    "/api/notifications/unread-count?filter=anonymous",
+  );
+}
+
+export function anonymousUnreadCountQueryOptions(role: SessionRole) {
+  return queryOptions({
+    queryKey: queryKeys.anonymousUnreadCount(role),
+    queryFn: fetchAnonymousUnreadCount,
+    staleTime: UNREAD_COUNT_STALE_MS,
+  });
+}
+
 export type AuthMePayload = {
   role: SessionRole;
   userId: string;
   email: string | undefined;
   name: string;
   studentId: string | null;
+  counselorId: string | null;
 };
 
 export function fetchAuthMe() {

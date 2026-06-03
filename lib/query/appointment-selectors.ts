@@ -1,4 +1,7 @@
 import type { AppointmentDTO } from "@/lib/booking/contracts";
+import type {
+  AppointmentFiltersState,
+} from "@/components/appointments/AppointmentFilters";
 
 export type AppointmentTab = "pending" | "upcoming" | "completed";
 
@@ -145,4 +148,34 @@ export function selectCounselorDashboardAppointments(todayIso: string) {
       nextSession: approvedUpcoming[0],
     };
   };
+}
+
+export function applyCompletedFilters(
+  appointments: AppointmentDTO[],
+  filters: AppointmentFiltersState,
+): AppointmentDTO[] {
+  let filtered = appointments.filter((a) =>
+    filters.statuses.includes(a.status),
+  );
+
+  if (filters.dateFrom) {
+    filtered = filtered.filter(
+      (a) => a.appointment_date >= filters.dateFrom,
+    );
+  }
+
+  if (filters.dateTo) {
+    filtered = filtered.filter(
+      (a) => a.appointment_date <= filters.dateTo,
+    );
+  }
+
+  const sorted = [...filtered].sort((left, right) => {
+    const cmp = (left.updated_at ?? left.created_at).localeCompare(
+      right.updated_at ?? right.created_at,
+    );
+    return filters.sortOrder === "desc" ? -cmp : cmp;
+  });
+
+  return sorted;
 }

@@ -10,5 +10,5 @@ export function LogoutButton() {
     await signOut();
   };
 
-  return <Button onClick={logout}>Logout</Button>;
+  return <Button variant="destructive" onClick={logout}>Logout</Button>;
 }

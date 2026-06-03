@@ -115,6 +115,10 @@ export class BookingService {
     return this.repo.countUnreadNotifications(role, userId);
   }
 
+  countUnreadAnonymousMessages(role: SessionRole, userId?: string) {
+    return this.repo.countUnreadAnonymousMessages(role, userId);
+  }
+
   getCounselorGoogleToken(counselorId: string) {
     return this.repo.getCounselorGoogleToken(counselorId);
   }

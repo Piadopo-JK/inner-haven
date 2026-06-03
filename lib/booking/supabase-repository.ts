@@ -110,6 +110,7 @@ type CounselorRow = {
   office_room: string | null;
   about: string | null;
   avatar_url: string | null;
+  hero_card_url: string | null;
 };
 
 type StudentRow = {
@@ -174,6 +175,7 @@ function mapCounselorRowToDTO(row: CounselorRow): CounselorDirectoryItemDTO {
     office_room: row.office_room ?? "",
     about: row.about ?? "",
     avatar_url: row.avatar_url ?? undefined,
+    hero_card_url: row.hero_card_url ?? undefined,
   };
 }
 
@@ -368,23 +370,38 @@ export class SupabaseBookingRepository implements BookingRepository {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("counselors")
-      .select("counselor_id, name, email, specialization, office_room, about, avatar_url")
+      .select("counselor_id, name, email, specialization, office_room, about, avatar_url, hero_card_url")
       .order("name", { ascending: true });
 
     if (error) {
-      if (!isMissingColumnError(error, "counselors", "avatar_url")) {
+      const missingAvatar = isMissingColumnError(error, "counselors", "avatar_url");
+      const missingHero = isMissingColumnError(error, "counselors", "hero_card_url");
+      if (!missingAvatar && !missingHero) {
         throw error;
       }
 
+      const safeSelect = "counselor_id, name, email, specialization, office_room, about"
+        + (missingAvatar ? "" : ", avatar_url")
+        + (missingHero ? "" : ", hero_card_url");
+
       const { data: fallbackData, error: fallbackError } = await supabase
         .from("counselors")
-        .select("counselor_id, name, email, specialization, office_room, about")
+        .select(safeSelect)
         .order("name", { ascending: true });
 
       if (fallbackError) throw fallbackError;
 
-      return ((fallbackData ?? []) as Array<Omit<CounselorRow, "avatar_url">>).map((row) =>
-        mapCounselorRowToDTO({ ...row, avatar_url: null }),
+      return ((fallbackData ?? []) as Array<Partial<CounselorRow>>).map((row) =>
+        mapCounselorRowToDTO({
+          counselor_id: row.counselor_id!,
+          name: row.name!,
+          email: row.email!,
+          specialization: row.specialization ?? null,
+          office_room: row.office_room ?? null,
+          about: row.about ?? null,
+          avatar_url: row.avatar_url ?? null,
+          hero_card_url: row.hero_card_url ?? null,
+        }),
       );
     }
 
@@ -1251,6 +1268,16 @@ export class SupabaseBookingRepository implements BookingRepository {
   ): Promise<number> {
     const notifications = await this.listNotifications(role, userId);
     return notifications.filter((notification) => !notification.read).length;
+  }
+
+  async countUnreadAnonymousMessages(
+    role: SessionRole,
+    userId?: string,
+  ): Promise<number> {
+    const notifications = await this.listNotifications(role, userId);
+    return notifications.filter(
+      (n) => !n.read && n.type === "session_notes" && n.anonymous_thread_id,
+    ).length;
   }
 
   async getSessionNote(appointmentId: string): Promise<SessionNoteDTO | null> {

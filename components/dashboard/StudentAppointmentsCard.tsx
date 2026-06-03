@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { MoreVertical } from "lucide-react";
 
@@ -35,8 +36,13 @@ function AppointmentActions({
   onCancel: (appointment: AppointmentDTO) => Promise<void>;
 }) {
   const [isBusy, setIsBusy] = useState(false);
+  const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const canCancel = appointment.status === "pending" || appointment.status === "approved";
   const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
+  const canEdit = appointment.status === "pending";
+  const canViewNotes = appointment.status === "completed";
+  const editHref = `/appointments/${appointment.appointment_id}/edit`;
+  const notesHref = `/appointments/${appointment.appointment_id}/notes`;
 
   async function handleCancel() {
     setIsBusy(true);
@@ -48,37 +54,65 @@ function AppointmentActions({
   }
 
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Appointment actions"
-          className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10"
-          disabled={isBusy}
-        >
-          <MoreVertical className="w-5 h-5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="rounded-xl">
-        {canJoinOnline ? (
-          <DropdownMenuItem asChild className="cursor-pointer">
-            <a href={appointment.meeting_link} target="_blank" rel="noreferrer">
-              Join Session Now
-            </a>
-          </DropdownMenuItem>
-        ) : null}
-        {canCancel ? (
-          <DropdownMenuItem
-            className="cursor-pointer text-[var(--md-sys-color-error)]"
-            onSelect={handleCancel}
+    <>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Appointment actions"
+            className="text-[var(--md-sys-color-on-surface-variant)] rounded-full h-10 w-10"
             disabled={isBusy}
           >
-            {isBusy ? "Cancelling..." : "Cancel Appointment"}
-          </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <MoreVertical className="w-5 h-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="rounded-xl">
+          {canJoinOnline ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <a href={appointment.meeting_link} target="_blank" rel="noreferrer">
+                Join Session Now
+              </a>
+            </DropdownMenuItem>
+          ) : null}
+          {canEdit ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href={editHref}>Edit Appointment</Link>
+            </DropdownMenuItem>
+          ) : null}
+          {canCancel ? (
+            <DropdownMenuItem
+              className="cursor-pointer text-[var(--md-sys-color-error)]"
+              onSelect={() => setShowConfirmCancel(true)}
+              disabled={isBusy}
+            >
+              {isBusy ? "Cancelling..." : "Cancel Appointment"}
+            </DropdownMenuItem>
+          ) : null}
+          {canViewNotes ? (
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href={notesHref}>Session Notes</Link>
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {showConfirmCancel && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowConfirmCancel(false)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmCancel(false); }}>
+            <div className="w-full max-w-sm rounded-2xl border p-6 text-center shadow-xl" style={{ borderColor: "var(--md-sys-color-outline-variant)", background: "var(--md-sys-color-surface-container-high)" }}>
+              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>Cancel this appointment?</p>
+              <p className="mt-1 text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>This action cannot be undone.</p>
+              <div className="flex justify-center gap-3 mt-4">
+                <Button variant="outline" size="sm" onClick={() => setShowConfirmCancel(false)} className="rounded-xl">Back</Button>
+                <Button size="sm" onClick={handleCancel} className="rounded-xl" style={{ background: "var(--md-sys-color-error)", color: "var(--md-sys-color-on-error)" }}>Confirm</Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 import { DeployButton } from "@/components/deploy-button";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { AuthButton } from "@/components/auth-button";
-import { ThemeToggle } from "@/components/theme-switcher";
+import { ThemeToggle as ThemeSwitcher } from "@/components/theme-switcher";
 import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -47,7 +47,7 @@ export default function ProtectedLayout({
               Supabase
             </a>
           </p>
-          <ThemeToggle />
+          <ThemeSwitcher />
         </footer>
       </div>
     </main>

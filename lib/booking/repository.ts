@@ -51,6 +51,7 @@ export interface BookingRepository {
   markNotificationRead(notificationId: string): Promise<NotificationDTO | null>;
   markAllNotificationsRead(role: SessionRole, userId?: string): Promise<number>;
   countUnreadNotifications(role: SessionRole, userId?: string): Promise<number>;
+  countUnreadAnonymousMessages(role: SessionRole, userId?: string): Promise<number>;
   resolveStudentId(id: string): Promise<string | null>;
   resolveCounselorId(id: string): Promise<string | null>;
   ensureStudentProfile(input: {
