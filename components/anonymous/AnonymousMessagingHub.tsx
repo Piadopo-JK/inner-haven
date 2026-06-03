@@ -27,6 +27,7 @@ export default function AnonymousMessagingHub({
 }) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>();
   const [showDetachConfirm, setShowDetachConfirm] = useState(false);
+  const [detachAction, setDetachAction] = useState<"remove" | "new">("new");
   const [detachError, setDetachError] = useState("");
   const [sidebarView, setSidebarView] = useState<"threads" | "pick-counselor" | "new-thread">("threads");
   const [newThreadCounselorId, setNewThreadCounselorId] = useState<string | null>(null);
@@ -89,13 +90,14 @@ export default function AnonymousMessagingHub({
     ? threads.find((t) => t.counselorId === counselorId)
     : null;
 
-  async function handleDetachAndNewConversation() {
+  async function handleDetach() {
     if (!selectedThreadId) return;
     setDetachError("");
 
     try {
       await detachThread(selectedThreadId);
       setShowDetachConfirm(false);
+      setSelectedThreadId(undefined);
     } catch (err) {
       setDetachError(err instanceof Error ? err.message : "Unable to detach thread.");
     }
@@ -240,6 +242,7 @@ export default function AnonymousMessagingHub({
                         if (existingThread) {
                           setSelectedThreadId(existingThread.id);
                           setSidebarView("threads");
+                          setDetachAction("new");
                           setShowDetachConfirm(true);
                         } else {
                           setNewThreadCounselorId(c.counselorId);
@@ -271,7 +274,7 @@ export default function AnonymousMessagingHub({
                         </p>
                         {existingThread ? (
                           <p className="truncate text-xs" style={{ color: "var(--md-sys-color-primary)" }}>
-                            Active conversation — tap to start new
+                            Active conversation — tap to manage
                           </p>
                         ) : c.specialization ? (
                           <p className="truncate text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
@@ -317,7 +320,7 @@ export default function AnonymousMessagingHub({
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <h2 className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--msg-label-color)" }}>
-                    Messaging
+                    Chat
                   </h2>
                   <span className="relative group">
                     <Info className="h-3.5 w-3.5 cursor-help" style={{ color: "var(--md-sys-color-on-surface-variant)" }} />
@@ -347,8 +350,8 @@ export default function AnonymousMessagingHub({
                 threads={threads}
                 selectedThreadId={selectedThreadId}
                 onSelect={setSelectedThreadId}
-                onNewConversation={() => setShowDetachConfirm(true)}
-                onRemove={() => setShowDetachConfirm(true)}
+                onNewConversation={() => { setDetachAction("new"); setShowDetachConfirm(true); }}
+                onRemove={() => { setDetachAction("remove"); setShowDetachConfirm(true); }}
               />
             </>
           )}
@@ -359,8 +362,8 @@ export default function AnonymousMessagingHub({
             <AnonymousChat
               thread={selectedThread}
               sender="student"
-              onNewConversation={() => setShowDetachConfirm(true)}
-              onRemove={() => setShowDetachConfirm(true)}
+              onNewConversation={() => { setDetachAction("new"); setShowDetachConfirm(true); }}
+              onRemove={() => { setDetachAction("remove"); setShowDetachConfirm(true); }}
             />
           ) : (
             <div
@@ -385,8 +388,8 @@ export default function AnonymousMessagingHub({
               thread={selectedThread}
               sender="student"
               onBack={() => setSelectedThreadId(undefined)}
-              onNewConversation={() => setShowDetachConfirm(true)}
-              onRemove={() => setShowDetachConfirm(true)}
+              onNewConversation={() => { setDetachAction("new"); setShowDetachConfirm(true); }}
+              onRemove={() => { setDetachAction("remove"); setShowDetachConfirm(true); }}
             />
           </div>
         ) : (
@@ -430,8 +433,8 @@ export default function AnonymousMessagingHub({
               threads={threads}
               selectedThreadId={selectedThreadId}
               onSelect={setSelectedThreadId}
-              onNewConversation={() => setShowDetachConfirm(true)}
-              onRemove={() => setShowDetachConfirm(true)}
+              onNewConversation={() => { setDetachAction("new"); setShowDetachConfirm(true); }}
+              onRemove={() => { setDetachAction("remove"); setShowDetachConfirm(true); }}
             />
           </aside>
         )}
@@ -449,16 +452,16 @@ export default function AnonymousMessagingHub({
               }}
             >
               <h2 className="text-lg font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                Start a new conversation?
+                {detachAction === "remove" ? "Remove conversation?" : "Start a new conversation?"}
               </h2>
               <p
                 className="mt-3 text-sm leading-relaxed"
                 style={{ color: "var(--md-sys-color-on-surface-variant)" }}
               >
-                This will close your existing conversation with{" "}
-                <strong>{selectedThread.counselorName}</strong>.
-                The counselor will see your previous messages but you will no longer
-                be able to access them. A new pseudonymous label will be used.
+                {detachAction === "remove"
+                  ? <>This will remove your conversation with{" "}<strong>{selectedThread.counselorName}</strong> from your view. The counselor can still access it.</>
+                  : <>This will close your existing conversation with{" "}<strong>{selectedThread.counselorName}</strong>. The counselor will see your previous messages but you will no longer be able to access them. A new pseudonymous label will be used.</>
+                }
               </p>
               {detachError ? (
                 <p className="mt-3 text-sm" style={{ color: "var(--md-sys-color-error)" }}>
@@ -473,9 +476,9 @@ export default function AnonymousMessagingHub({
                     color: "var(--md-sys-color-on-primary)",
                   }}
                   disabled={isDetaching}
-                  onClick={handleDetachAndNewConversation}
+                  onClick={handleDetach}
                 >
-                  {isDetaching ? "Closing…" : "Close & start new"}
+                  {isDetaching ? "Removing…" : detachAction === "remove" ? "Remove" : "Close & start new"}
                 </Button>
                 <Button
                   variant="ghost"

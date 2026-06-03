@@ -65,7 +65,7 @@
   --guidance-sidebar-active-text: #111827;
   --guidance-sidebar-hover-bg: #e5e7eb;
   --guidance-sidebar-divider: #d1d5db;
-  --guidance-logout-text: #374151;
+  --guidance-logout-text: var(--md-sys-color-error);
   --guidance-logo-primary: #4caf50;
   --guidance-logo-accent: #666666;
   --guidance-logo-muted: #6b7280;
@@ -172,7 +172,7 @@
     --guidance-sidebar-active-text: #f3f4f6;
     --guidance-sidebar-hover-bg: #262626;
     --guidance-sidebar-divider: #374151;
-    --guidance-logout-text: #9ca3af;
+    --guidance-logout-text: var(--md-sys-color-error);
     --guidance-logo-primary: #f3f4f6;
     --guidance-logo-accent: #d1d5db;
     --guidance-logo-muted: #9ca3af;
@@ -278,7 +278,7 @@
   --guidance-sidebar-active-text: #f3f4f6;
   --guidance-sidebar-hover-bg: #262626;
   --guidance-sidebar-divider: #374151;
-  --guidance-logout-text: #9ca3af;
+  --guidance-logout-text: var(--md-sys-color-error);
 
   --guidance-next-session-bg: #374151;
 

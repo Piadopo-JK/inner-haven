@@ -7,13 +7,13 @@ import { CounselorDirectoryItemDTO } from "@/lib/booking/contracts";
 
 const ACCENT_BACKGROUNDS = [
   "var(--md-sys-color-primary-container)",
-  "#2c2c2c",
+  "var(--md-sys-color-secondary-container)",
   "var(--md-sys-color-tertiary-container)",
 ];
 
 const ACCENT_FOREGROUNDS = [
   "var(--md-sys-color-on-primary-container)",
-  "#ffffff",
+  "var(--md-sys-color-on-secondary-container)",
   "var(--md-sys-color-on-tertiary-container)",
 ];
 
@@ -23,6 +23,7 @@ type CounselorCardProps = {
   canMessage?: boolean;
   colorIndex?: number;
   isOnline?: boolean;
+  priority?: boolean;
 };
 
 function getInitials(name: string) {
@@ -40,14 +41,19 @@ export default function CounselorCard({
   canMessage = false,
   colorIndex = 0,
   isOnline = false,
+  priority = false,
 }: CounselorCardProps) {
   const accentBg = ACCENT_BACKGROUNDS[colorIndex % ACCENT_BACKGROUNDS.length];
   const accentFg = ACCENT_FOREGROUNDS[colorIndex % ACCENT_FOREGROUNDS.length];
 
   return (
     <div
-      className="flex flex-col overflow-hidden rounded-[20px] bg-white"
-      style={{ boxShadow: "var(--md-sys-elevation-level2)" }}
+      className="flex flex-col overflow-hidden rounded-[20px] border-2"
+      style={{
+        background: "var(--md-sys-color-surface)",
+        borderColor: "var(--md-sys-color-outline-variant)",
+        boxShadow: "var(--md-sys-elevation-level2)",
+      }}
     >
       <div
         className="relative w-full"
@@ -65,13 +71,14 @@ export default function CounselorCard({
             Online
           </span>
         ) : null}
-        {counselor.avatar_url ? (
+        {(counselor.hero_card_url || counselor.avatar_url) ? (
           <Image
-            src={counselor.avatar_url}
+            src={counselor.hero_card_url || counselor.avatar_url!}
             alt={counselor.name}
             fill
+            priority={priority}
             className="object-cover"
-            sizes="120px"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             style={{ borderRadius: "20px 20px 0 0" }}
           />
         ) : (
@@ -112,9 +119,10 @@ export default function CounselorCard({
           {canBook ? (
             <Link
               href={`/appointments/new?counselor_id=${counselor.counselor_id}`}
-              className="block w-full rounded-[10px] py-2.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              className="block w-full rounded-[10px] py-2.5 text-center text-sm font-semibold transition-opacity hover:opacity-90"
               style={{
                 background: "var(--md-sys-color-primary)",
+                color: "var(--md-sys-color-on-primary)",
                 boxShadow: "var(--md-sys-elevation-level1)",
               }}
             >
