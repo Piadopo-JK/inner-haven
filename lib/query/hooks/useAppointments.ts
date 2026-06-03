@@ -123,7 +123,7 @@ export function useAppointmentsRealtimeSync(role: SessionRole) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments" },
-        (payload) => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.appointments(role),
           });

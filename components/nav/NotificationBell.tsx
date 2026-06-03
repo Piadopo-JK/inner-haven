@@ -64,7 +64,7 @@ export default function NotificationBell({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
-        (payload) => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           const row = ((payload.new ?? payload.old) as {
             recipient_id?: string;
             recipient_role?: SessionRole;

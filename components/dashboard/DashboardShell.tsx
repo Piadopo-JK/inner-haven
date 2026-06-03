@@ -35,10 +35,7 @@ export default function DashboardShell({ resolvedUserId }: { resolvedUserId?: st
 
   if (guard.me.role === "counselor") {
     return (
-      <CounselorDashboardClient
-        counselorName={guard.me.name}
-        resolvedUserId={resolvedUserId ?? undefined}
-      />
+      <CounselorDashboardClient counselorName={guard.me.name} />
     );
   }
 

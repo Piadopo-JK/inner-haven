@@ -113,11 +113,9 @@ export function useAnonymousIdentityRealtimeSync(ownerAuthUserId?: string) {
           table: "anonymous_threads",
           filter: `owner_auth_user_id=eq.${ownerAuthUserId}`,
         },
-        (payload) => {
+        (payload: { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> }) => {
           if (
-            isLastSeenAtOnlyUpdate(
-              payload as { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> },
-            )
+            isLastSeenAtOnlyUpdate(payload)
           ) {
             return;
           }
@@ -244,11 +242,9 @@ export function useCounselorAnonymousThreadsRealtimeSync() {
           schema: "public",
           table: "anonymous_threads",
         },
-        (payload) => {
+        (payload: { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> }) => {
           if (
-            isLastSeenAtOnlyUpdate(
-              payload as { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> },
-            )
+            isLastSeenAtOnlyUpdate(payload)
           ) {
             return;
           }
