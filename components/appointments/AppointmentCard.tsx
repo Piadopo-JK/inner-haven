@@ -1,17 +1,20 @@
 "use client";
 
-import { Calendar, Clock, MoreVertical } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Clock, MoreVertical } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { AppointmentDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, AvailabilityEmptyState, AvailabilitySlotDTO } from "@/lib/booking/contracts";
 import { Button } from "@/components/ui/button";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
 import { appointmentDetailsQueryOptions } from "@/lib/query/queries";
 import { TruncatedText } from "@/components/ui/truncated-text";
+import AvailableSlotsGrid from "@/components/appointments/AvailableSlotsGrid";
+import { useAvailabilityForMonth } from "@/lib/query/hooks/useAvailability";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,8 +29,8 @@ interface AppointmentCardProps {
   participantAvatar?: string;
   onCancelAppointment?: (appointment: AppointmentDTO) => Promise<void>;
   onApproveAppointment?: (appointment: AppointmentDTO) => Promise<void>;
-  onDeclineAppointment?: (appointment: AppointmentDTO) => Promise<void>;
   onCompleteAppointment?: (appointment: AppointmentDTO) => Promise<void>;
+  onRescheduleAppointment?: (appointmentId: string, date: string, time: string) => Promise<void>;
 }
 
 function formatDisplayTime(rawTime: string) {
@@ -92,12 +95,39 @@ export default function AppointmentCard({
   participantAvatar,
   onCancelAppointment,
   onApproveAppointment,
-  onDeclineAppointment,
   onCompleteAppointment,
+  onRescheduleAppointment,
 }: AppointmentCardProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [isCancelling, setIsCancelling] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"cancel" | "approve" | "complete" | null>(null);
+  const menuActionRef = useRef(false);
+  const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState(appointment.appointment_date);
+  const [rescheduleTime, setRescheduleTime] = useState("");
+  const [rescheduleViewMonth, setRescheduleViewMonth] = useState(() => {
+    const d = new Date(appointment.appointment_date + "T00:00:00");
+    return Number.isNaN(d.getTime()) ? new Date() : d;
+  });
+
+  // Fetch availability for the selected date
+  const { data: availabilityWindow, isLoading: isLoadingSlots } = useAvailabilityForMonth(
+    appointment.counselor_id,
+    rescheduleViewMonth,
+  );
+
+  const daySlots: AvailabilitySlotDTO[] = useMemo(() => {
+    if (!availabilityWindow?.by_date) return [];
+    const dayData = availabilityWindow.by_date[rescheduleDate];
+    return dayData?.slots ?? [];
+  }, [availabilityWindow, rescheduleDate]);
+
+  const slotsEmptyState: AvailabilityEmptyState = useMemo(() => {
+    if (!availabilityWindow?.by_date) return "available";
+    const dayData = availabilityWindow.by_date[rescheduleDate];
+    return dayData?.empty_state ?? "available";
+  }, [availabilityWindow, rescheduleDate]);
 
   const detailsHref = `/appointments/${appointment.appointment_id}`;
   const editHref = `/appointments/${appointment.appointment_id}/edit`;
@@ -107,13 +137,14 @@ export default function AppointmentCard({
   const canCancel =
     appointment.status === "pending" || appointment.status === "approved";
   const canApprove = role === "counselor" && appointment.status === "pending";
-  const canDecline = role === "counselor" && appointment.status === "pending";
+  const canReschedule = role === "counselor" && appointment.status === "pending";
   const canComplete = role === "counselor" && appointment.status === "approved";
   const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
   const canEdit = role === "student" && appointment.status === "pending";
   const canViewNotes = (role === "counselor" && (appointment.status === "approved" || appointment.status === "completed"))
     || (role === "student" && appointment.status === "completed");
   const showMenu = !["cancelled", "expired"].includes(appointment.status);
+  const isInert = appointment.status === "cancelled" || appointment.status === "expired";
   const todayIso = new Date().toISOString().split("T")[0];
   const ribbon = getStatusRibbon(appointment, todayIso);
 
@@ -130,6 +161,7 @@ export default function AppointmentCard({
       await onCancelAppointment(appointment);
     } finally {
       setIsCancelling(false);
+      setConfirmAction(null);
     }
   }
 
@@ -140,16 +172,7 @@ export default function AppointmentCard({
       await onApproveAppointment(appointment);
     } finally {
       setIsCancelling(false);
-    }
-  }
-
-  async function handleDecline() {
-    if (!onDeclineAppointment) return;
-    setIsCancelling(true);
-    try {
-      await onDeclineAppointment(appointment);
-    } finally {
-      setIsCancelling(false);
+      setConfirmAction(null);
     }
   }
 
@@ -160,7 +183,27 @@ export default function AppointmentCard({
       await onCompleteAppointment(appointment);
     } finally {
       setIsCancelling(false);
+      setConfirmAction(null);
     }
+  }
+
+  async function handleRescheduleSubmit() {
+    if (!onRescheduleAppointment || !rescheduleDate || !rescheduleTime) return;
+    setIsCancelling(true);
+    try {
+      await onRescheduleAppointment(appointment.appointment_id, rescheduleDate, rescheduleTime);
+      setIsRescheduleOpen(false);
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  function openReschedule() {
+    const d = new Date(appointment.appointment_date + "T00:00:00");
+    setRescheduleDate(appointment.appointment_date);
+    setRescheduleViewMonth(Number.isNaN(d.getTime()) ? new Date() : d);
+    setRescheduleTime("");
+    setIsRescheduleOpen(true);
   }
 
   function prefetchAppointmentDetails() {
@@ -171,35 +214,38 @@ export default function AppointmentCard({
 
   return (
     <Card
-      className="w-full min-w-0 max-w-full p-6 rounded-[24px] cursor-pointer overflow-hidden break-words transition-all duration-200"
+      className={`w-full min-w-0 max-w-full p-6 rounded-[24px] overflow-hidden break-words transition-all duration-200 ${isInert ? "" : "cursor-pointer"}`}
       style={{
         border: "1px solid var(--md-sys-color-outline-variant)",
         background: "var(--md-sys-color-surface)",
         boxShadow: "var(--md-sys-elevation-level1)",
+        ...(isInert ? { opacity: 0.75 } : {}),
       }}
-      role="link"
-      tabIndex={0}
-      onMouseEnter={(e) => {
+      role={isInert ? undefined : "link"}
+      tabIndex={isInert ? undefined : 0}
+      onMouseEnter={isInert ? undefined : (e) => {
         prefetchAppointmentDetails();
         const el = e.currentTarget;
         el.style.borderColor = "var(--md-sys-color-primary)";
         el.style.boxShadow = "var(--md-sys-elevation-level3)";
       }}
-      onMouseLeave={(e) => {
+      onMouseLeave={isInert ? undefined : (e) => {
         const el = e.currentTarget;
         el.style.borderColor = "var(--md-sys-color-outline-variant)";
         el.style.boxShadow = "var(--md-sys-elevation-level1)";
       }}
-      onClick={(event) => {
+      onClick={isInert ? undefined : (event) => {
         const target = event.target as HTMLElement;
-        if (target.closest("[data-no-card-nav='true']")) {
+        if (target.closest("[data-no-card-nav='true']") || menuActionRef.current) {
+          menuActionRef.current = false;
           return;
         }
         router.push(detailsHref);
       }}
-      onKeyDown={(event) => {
+      onKeyDown={isInert ? undefined : (event) => {
         const target = event.target as HTMLElement;
-        if (target.closest("[data-no-card-nav='true']")) {
+        if (target.closest("[data-no-card-nav='true']") || menuActionRef.current) {
+          menuActionRef.current = false;
           return;
         }
         if (event.key === "Enter" || event.key === " ") {
@@ -208,7 +254,7 @@ export default function AppointmentCard({
         }
       }}
     >
-      <div className="flex items-center justify-between min-w-0 gap-3">
+      <div className="flex items-start justify-between min-w-0 gap-3">
         <div className="flex gap-4 min-w-0 flex-1">
           <div className="relative w-16 h-16 rounded-2xl bg-[var(--md-sys-color-surface-container-highest)] flex items-center justify-center shrink-0 overflow-hidden">
             {participantAvatar ? (
@@ -247,7 +293,7 @@ export default function AppointmentCard({
         {showMenu ? (
           <div
             data-no-card-nav="true"
-            className="self-center shrink-0"
+            className="shrink-0 mt-1"
             onClick={(event) => event.stopPropagation()}
           >
           <DropdownMenu modal={false}>
@@ -273,21 +319,25 @@ export default function AppointmentCard({
               {canApprove ? (
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  onSelect={handleApprove}
+                  onSelect={() => { menuActionRef.current = true; setConfirmAction("approve"); }}
                   disabled={isCancelling}
                 >
                   {isCancelling ? "Updating..." : "Accept Appointment"}
                 </DropdownMenuItem>
               ) : null}
-              {canDecline ? (
-                <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href={editHref}>Reschedule</Link>
+              {canReschedule ? (
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={() => { menuActionRef.current = true; openReschedule(); }}
+                  disabled={isCancelling}
+                >
+                  Reschedule
                 </DropdownMenuItem>
               ) : null}
               {canComplete ? (
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  onSelect={handleComplete}
+                  onSelect={() => { menuActionRef.current = true; setConfirmAction("complete"); }}
                   disabled={isCancelling}
                 >
                   {isCancelling ? "Updating..." : "Mark Complete"}
@@ -306,7 +356,7 @@ export default function AppointmentCard({
               {canCancel ? (
                 <DropdownMenuItem
                   className="cursor-pointer text-[var(--md-sys-color-error)]"
-                  onSelect={handleCancel}
+                  onSelect={() => { menuActionRef.current = true; setConfirmAction("cancel"); }}
                   disabled={isCancelling}
                 >
                   {isCancelling ? "Cancelling..." : "Cancel Appointment"}
@@ -316,6 +366,158 @@ export default function AppointmentCard({
           </DropdownMenu>
           </div>
         ) : null}
+
+        {isRescheduleOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
+              onClick={() => setIsRescheduleOpen(false)}
+            />
+            <div
+              data-no-card-nav="true"
+              className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={(e) => { if (e.target === e.currentTarget) setIsRescheduleOpen(false); }}
+            >
+              <div
+                className="w-full max-w-md rounded-2xl border p-6 shadow-xl"
+                style={{
+                  borderColor: "var(--md-sys-color-outline-variant)",
+                  background: "var(--md-sys-color-surface-container-high)",
+                }}
+              >
+                <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  Reschedule Appointment
+                </h3>
+
+                <div
+                  className="rounded-2xl border p-4 mb-4"
+                  style={{
+                    borderColor: "var(--md-sys-color-outline-variant)",
+                    background: "var(--md-sys-color-surface-container-lowest)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-[var(--md-sys-color-on-surface)]">
+                      Select Date
+                    </p>
+                    <div className="flex gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Previous month"
+                        className="w-8 h-8 rounded-full"
+                        onClick={() => setRescheduleViewMonth(new Date(rescheduleViewMonth.getFullYear(), rescheduleViewMonth.getMonth() - 1, 1))}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Next month"
+                        className="w-8 h-8 rounded-full"
+                        onClick={() => setRescheduleViewMonth(new Date(rescheduleViewMonth.getFullYear(), rescheduleViewMonth.getMonth() + 1, 1))}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <CalendarPicker
+                    mode="single"
+                    selected={(() => { const d = new Date(rescheduleDate + "T00:00:00"); return Number.isNaN(d.getTime()) ? undefined : d; })()}
+                    onSelect={(day) => {
+                      if (day) {
+                        const y = day.getFullYear();
+                        const m = String(day.getMonth() + 1).padStart(2, "0");
+                        const d = String(day.getDate()).padStart(2, "0");
+                        setRescheduleDate(`${y}-${m}-${d}`);
+                        setRescheduleTime("");
+                      }
+                    }}
+                    month={rescheduleViewMonth}
+                    onMonthChange={setRescheduleViewMonth}
+                  />
+                </div>
+
+                <AvailableSlotsGrid
+                  slots={daySlots}
+                  selectedSlot={rescheduleTime}
+                  onSelect={setRescheduleTime}
+                  isLoading={isLoadingSlots}
+                  emptyState={slotsEmptyState}
+                  selectedDate={rescheduleDate}
+                />
+
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsRescheduleOpen(false)}
+                    className="rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleRescheduleSubmit}
+                    disabled={isCancelling || !rescheduleDate || !rescheduleTime}
+                    size="sm"
+                    className="rounded-xl"
+                    style={{
+                      background: "var(--md-sys-color-primary)",
+                      color: "var(--md-sys-color-on-primary)",
+                    }}
+                  >
+                    {isCancelling ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {confirmAction && (
+          <>
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => setConfirmAction(null)} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setConfirmAction(null); }}>
+              <div
+                className="w-full max-w-sm rounded-2xl border p-6 text-center shadow-xl"
+                style={{
+                  borderColor: "var(--md-sys-color-outline-variant)",
+                  background: "var(--md-sys-color-surface-container-high)",
+                }}
+              >
+                <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  {confirmAction === "cancel"
+                    ? "Cancel this appointment?"
+                    : confirmAction === "approve"
+                    ? "Accept this appointment?"
+                    : "Mark this appointment as complete?"}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                  {confirmAction === "cancel"
+                    ? "This action cannot be undone."
+                    : confirmAction === "approve"
+                    ? "The student will be notified."
+                    : "The session will be marked as finished."}
+                </p>
+                <div className="flex justify-center gap-3 mt-4">
+                  <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)} className="rounded-xl">Back</Button>
+                  <Button
+                    size="sm"
+                    onClick={confirmAction === "cancel" ? handleCancel : confirmAction === "approve" ? handleApprove : handleComplete}
+                    className="rounded-xl"
+                    style={confirmAction === "cancel"
+                      ? { background: "var(--md-sys-color-error)", color: "var(--md-sys-color-on-error)" }
+                      : { background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+                  >
+                    Confirm
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {appointment.reason ? (
