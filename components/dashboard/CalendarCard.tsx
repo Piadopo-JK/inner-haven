@@ -4,7 +4,7 @@ import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { AppointmentDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, isConfirmed } from "@/lib/booking/contracts";
 import { cn } from "@/lib/utils";
 
 type CalendarCardProps = {
@@ -152,7 +152,7 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
                   key={a.appointment_id}
                   className="flex items-center gap-2 rounded-lg px-2 py-1.5"
                   style={{
-                    background: a.status === "approved"
+                    background: isConfirmed(a.status)
                       ? "var(--md-sys-color-primary-container)"
                       : a.status === "completed"
                       ? "var(--md-sys-color-secondary-container)"
@@ -162,7 +162,7 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
                   <span
                     className="text-xs font-medium"
                     style={{
-                      color: a.status === "approved"
+                      color: isConfirmed(a.status)
                         ? "var(--md-sys-color-on-primary-container)"
                         : a.status === "completed"
                         ? "var(--md-sys-color-on-secondary-container)"

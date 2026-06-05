@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import { AppointmentDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, isConfirmed } from "@/lib/booking/contracts";
 
 type AppointmentSection = {
   title: string;
@@ -68,7 +68,7 @@ function AppointmentItem({
     appointment.status === "expired";
 
   const colorClass =
-    appointment.status === "approved"
+    isConfirmed(appointment.status)
       ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
       : "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]";
 

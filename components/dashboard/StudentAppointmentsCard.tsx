@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import AppointmentsSections from "@/components/dashboard/AppointmentsSections";
-import { AppointmentDTO, CounselorDirectoryItemDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, CounselorDirectoryItemDTO, isConfirmed } from "@/lib/booking/contracts";
 import {
   useAppointments,
   useAppointmentsRealtimeSync,
@@ -37,8 +37,8 @@ function AppointmentActions({
 }) {
   const [isBusy, setIsBusy] = useState(false);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
-  const canCancel = appointment.status === "pending" || appointment.status === "approved";
-  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
+  const canCancel = appointment.status === "pending" || isConfirmed(appointment.status);
+  const canJoinOnline = appointment.mode === "online" && isConfirmed(appointment.status) && Boolean(appointment.meeting_link);
   const canEdit = appointment.status === "pending";
   const canViewNotes = appointment.status === "completed";
   const editHref = `/appointments/${appointment.appointment_id}/edit`;
