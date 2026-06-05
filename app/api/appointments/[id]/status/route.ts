@@ -65,6 +65,16 @@ export async function PATCH(
       );
     }
 
+    if (message.startsWith("APPOINTMENT_STATUS_UPDATE_FAILED:")) {
+      return NextResponse.json(
+        {
+          error: message.replace("APPOINTMENT_STATUS_UPDATE_FAILED:", ""),
+          code: "APPOINTMENT_STATUS_UPDATE_FAILED",
+        },
+        { status: 500 },
+      );
+    }
+
     if (/timeslot is already taken/i.test(message)) {
       return NextResponse.json(
         {

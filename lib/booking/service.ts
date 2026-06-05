@@ -83,7 +83,14 @@ export class BookingService {
               "GOOGLE_MEET_CREATE_FAILED:Unable to create a Google Meet link right now. Please try again.",
             );
           }
-          await this.repo.saveMeetLink(id, meetingLink);
+          try {
+            await this.repo.saveMeetLink(id, meetingLink);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            throw new Error(
+              `GOOGLE_MEET_CREATE_FAILED:Unable to save the meeting link. ${message}`,
+            );
+          }
         } else {
           throw new Error(
             "GOOGLE_RECONNECT_REQUIRED:Connect Google to approve online appointments with Meet links.",
@@ -92,7 +99,14 @@ export class BookingService {
       }
     }
 
-    return this.repo.updateAppointmentStatus(id, status, meetingLink, performedBy);
+    try {
+      return this.repo.updateAppointmentStatus(id, status, meetingLink, performedBy);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      throw new Error(
+        `APPOINTMENT_STATUS_UPDATE_FAILED:Unable to update appointment status. ${message}`,
+      );
+    }
   }
 
   rescheduleAppointment(id: string, appointmentDate: string, appointmentTime: string) {
