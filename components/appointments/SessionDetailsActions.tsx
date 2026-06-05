@@ -8,9 +8,9 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Md3Message } from "@/components/ui/md3-message";
-import { SessionNoteDTO } from "@/lib/booking/contracts";
+import { SessionNoteDTO, isConfirmed, type AppointmentStatus } from "@/lib/booking/contracts";
 import { queryKeys } from "@/lib/query/queries";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import { useAppointmentDetails } from "@/lib/query/hooks/useAppointmentDetails";
 import {
   useCancelCounselorAppointment,
@@ -26,9 +26,10 @@ export const STATUS_STYLES: Record<string, { bg: string; color: string; label: s
   cancelled: { bg: "var(--md-sys-color-error-container)", color: "var(--md-sys-color-on-error-container)", label: "Cancelled" },
   completed: { bg: "var(--md-sys-color-primary-container)", color: "var(--md-sys-color-on-primary-container)", label: "Completed" },
   expired:   { bg: "var(--md-sys-color-surface-container-high)", color: "var(--md-sys-color-on-surface-variant)", label: "Expired" },
+  rescheduled: { bg: "var(--md-sys-color-tertiary-container)", color: "var(--md-sys-color-on-tertiary-container)", label: "Rescheduled" },
 };
 
-type MinimalAppointment = { appointment_id: string; status: string };
+type MinimalAppointment = { appointment_id: string; status: AppointmentStatus };
 
 export function SessionStatusPill({
   appointmentId,
@@ -65,7 +66,7 @@ type SessionDetailsActionsProps = {
     reason: string;
     reason_preview: string;
     mode: "in_person" | "online";
-    status: "pending" | "approved" | "cancelled" | "completed" | "expired";
+    status: "pending" | "approved" | "cancelled" | "completed" | "expired" | "rescheduled";
     created_at: string;
     updated_at: string;
     meeting_link?: string;
@@ -107,47 +108,32 @@ export default function SessionDetailsActions({
     setRescheduleTime(appointment.appointment_time.slice(0, 5));
   }, [appointment.appointment_date, appointment.appointment_time]);
 
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`appointment-details-${appointmentId}-${crypto.randomUUID().slice(0, 8)}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "appointments",
-        },
-        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
-          const rowId = ((payload.new ?? payload.old) as Record<string, unknown>).appointment_id as string | undefined;
-          if (rowId !== appointmentId) return;
-
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.appointmentDetails(appointmentId),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [appointmentId, queryClient]);
+  useRealtimeChannel({
+    channelPrefix: `appointment-detail-${appointmentId}`,
+    tables: ["appointments"],
+    onEvent: (payload) => {
+      const row = (payload.new ?? payload.old ?? {}) as Record<string, unknown>;
+      if ((row.appointment_id as string | undefined) !== appointmentId) return;
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.appointmentDetails(appointmentId),
+      });
+    },
+  });
 
   const isBusy = isStudentCancelling || isCounselorCancelling || isUpdatingStatus || isRescheduling;
 
   const canCancel =
-    appointment.status === "pending" || appointment.status === "approved";
+    appointment.status === "pending" || isConfirmed(appointment.status);
   const isPending = appointment.status === "pending";
-  const isApproved = appointment.status === "approved";
+  const isApproved = isConfirmed(appointment.status);
   const canOpenSessionFeedback =
     role === "counselor" &&
-    (appointment.status === "approved" || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
+    (isConfirmed(appointment.status) || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
   const canViewSessionNotes =
     role === "student" &&
     Boolean(sessionNote) &&
-    (appointment.status === "approved" || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
-  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
+    (isConfirmed(appointment.status) || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
+  const canJoinOnline = appointment.mode === "online" && isConfirmed(appointment.status) && Boolean(appointment.meeting_link);
   const canComplete = role === "counselor" && isApproved;
   const canStudentEdit = role === "student" && isPending;
   const studentEditHref = `/appointments/${appointment.appointment_id}/edit`;

@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AppointmentDTO, AvailabilityEmptyState, AvailabilitySlotDTO, StudentDirectoryItemDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, AvailabilityEmptyState, AvailabilitySlotDTO, StudentDirectoryItemDTO, isConfirmed } from "@/lib/booking/contracts";
 import {
   type CounselorDashboardAppointments,
   useAppointments,
@@ -51,7 +51,7 @@ function AppointmentActions({
 }) {
   const detailsHref = `/appointments/${appointment.appointment_id}`;
   const notesHref = `/appointments/${appointment.appointment_id}/notes`;
-  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
+  const canJoinOnline = appointment.mode === "online" && isConfirmed(appointment.status) && Boolean(appointment.meeting_link);
   const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState(appointment.appointment_date);
   const [rescheduleTime, setRescheduleTime] = useState("");
@@ -139,19 +139,19 @@ function AppointmentActions({
             </DropdownMenuItem>
           ) : null}
 
-          {appointment.status === "approved" ? (
+          {isConfirmed(appointment.status) ? (
             <DropdownMenuItem className="cursor-pointer" onSelect={() => setConfirmAction("complete")} disabled={isBusy}>
               {isBusy ? "Updating..." : "Mark Complete"}
             </DropdownMenuItem>
           ) : null}
 
-          {(appointment.status === "approved" || appointment.status === "completed") ? (
+          {(isConfirmed(appointment.status) || appointment.status === "completed") ? (
             <DropdownMenuItem asChild className="cursor-pointer">
               <Link href={notesHref}>Session Notes</Link>
             </DropdownMenuItem>
           ) : null}
 
-          {(appointment.status === "pending" || appointment.status === "approved") ? (
+          {(appointment.status === "pending" || isConfirmed(appointment.status)) ? (
             <DropdownMenuItem
               className="cursor-pointer text-[var(--md-sys-color-error)]"
               onSelect={() => setConfirmAction("cancel")}
