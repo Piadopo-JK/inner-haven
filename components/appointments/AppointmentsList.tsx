@@ -1,4 +1,4 @@
-import { AppointmentDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, isConfirmed } from "@/lib/booking/contracts";
 import { TruncatedText } from "@/components/ui/truncated-text";
 
 const statusColors: Record<AppointmentDTO["status"], string> = {
@@ -12,6 +12,8 @@ const statusColors: Record<AppointmentDTO["status"], string> = {
     "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]",
   expired:
     "bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]",
+  rescheduled:
+    "bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)]",
 };
 
 function formatDisplayTime(rawTime: string) {
@@ -68,7 +70,7 @@ export default function AppointmentsList({
             ) : null}
           </p>
           {item.mode === "online" &&
-            item.status === "approved" &&
+            isConfirmed(item.status) &&
             item.meeting_link ? (
             <a
               href={item.meeting_link}

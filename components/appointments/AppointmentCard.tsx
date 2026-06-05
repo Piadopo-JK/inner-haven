@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { AppointmentDTO, AvailabilityEmptyState, AvailabilitySlotDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, AvailabilityEmptyState, AvailabilitySlotDTO, isConfirmed } from "@/lib/booking/contracts";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
@@ -27,6 +27,7 @@ interface AppointmentCardProps {
   role: "student" | "counselor";
   participantName?: string;
   participantAvatar?: string;
+  isRescheduled?: boolean;
   onCancelAppointment?: (appointment: AppointmentDTO) => Promise<void>;
   onApproveAppointment?: (appointment: AppointmentDTO) => Promise<void>;
   onCompleteAppointment?: (appointment: AppointmentDTO) => Promise<void>;
@@ -47,12 +48,7 @@ function formatDisplayTime(rawTime: string) {
   return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
-function getStatusRibbon(appointment: AppointmentDTO, todayIso: string) {
-  const isRescheduled =
-    appointment.updated_at &&
-    appointment.created_at &&
-    new Date(appointment.updated_at).getTime() - new Date(appointment.created_at).getTime() > 60_000;
-
+function getStatusRibbon(appointment: AppointmentDTO, todayIso: string, isRescheduled?: boolean) {
   if (appointment.status === "cancelled") {
     return {
       label: "Cancelled",
@@ -77,11 +73,19 @@ function getStatusRibbon(appointment: AppointmentDTO, todayIso: string) {
     };
   }
 
-  if (appointment.status === "approved" && appointment.appointment_date >= todayIso && isRescheduled) {
+  if (appointment.status === "rescheduled" && appointment.appointment_date >= todayIso) {
     return {
       label: "Rescheduled",
       className:
         "bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)]",
+    };
+  }
+
+  if (appointment.status === "approved" && appointment.appointment_date >= todayIso) {
+    return {
+      label: "Approved",
+      className:
+        "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]",
     };
   }
 
@@ -93,6 +97,7 @@ export default function AppointmentCard({
   role,
   participantName,
   participantAvatar,
+  isRescheduled,
   onCancelAppointment,
   onApproveAppointment,
   onCompleteAppointment,
@@ -135,18 +140,18 @@ export default function AppointmentCard({
   const displayTime = formatDisplayTime(appointment.appointment_time);
 
   const canCancel =
-    appointment.status === "pending" || appointment.status === "approved";
+    appointment.status === "pending" || isConfirmed(appointment.status);
   const canApprove = role === "counselor" && appointment.status === "pending";
   const canReschedule = role === "counselor" && appointment.status === "pending";
-  const canComplete = role === "counselor" && appointment.status === "approved";
-  const canJoinOnline = appointment.mode === "online" && appointment.status === "approved" && Boolean(appointment.meeting_link);
+  const canComplete = role === "counselor" && isConfirmed(appointment.status);
+  const canJoinOnline = appointment.mode === "online" && isConfirmed(appointment.status) && Boolean(appointment.meeting_link);
   const canEdit = role === "student" && appointment.status === "pending";
-  const canViewNotes = (role === "counselor" && (appointment.status === "approved" || appointment.status === "completed"))
+  const canViewNotes = (role === "counselor" && (isConfirmed(appointment.status) || appointment.status === "completed"))
     || (role === "student" && appointment.status === "completed");
   const showMenu = !["cancelled", "expired"].includes(appointment.status);
   const isInert = appointment.status === "cancelled" || appointment.status === "expired";
   const todayIso = new Date().toISOString().split("T")[0];
-  const ribbon = getStatusRibbon(appointment, todayIso);
+  const ribbon = getStatusRibbon(appointment, todayIso, isRescheduled);
 
   const date = new Date(appointment.appointment_date).toLocaleDateString("en-US", {
     month: "short",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 
 type StatCardProps = {
   label: string;
@@ -55,43 +55,21 @@ export default function CounselorStatsRow({
     setLiveMessages(messages);
   }, [messages]);
 
-  // Realtime anonymous message notification count
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`anon-notifications-rt-${resolvedCounselorId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${resolvedCounselorId}` },
-        (payload: { new: Record<string, unknown> }) => {
-          const row = payload.new;
-          if (
-            row?.type === "session_notes" &&
-            row?.anonymous_thread_id != null
-          ) {
-            setLiveMessages((prev) => prev + 1);
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${resolvedCounselorId}` },
-        (payload: { new: Record<string, unknown> }) => {
-          const row = payload.new;
-          if (
-            row?.type === "session_notes" &&
-            row?.anonymous_thread_id != null
-          ) {
-            setLiveMessages((prev) => Math.max(0, prev - 1));
-          }
-        },
-      )
-      .subscribe();
+  useRealtimeChannel({
+    channelPrefix: `counselor-notifications-${resolvedCounselorId}`,
+    tables: ["notifications"],
+    filters: { notifications: `recipient_id=eq.${resolvedCounselorId}` },
+    onEvent: (payload) => {
+      const row = payload.new as Record<string, unknown>;
+      if (row?.type !== "session_notes" || row?.anonymous_thread_id == null) return;
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [resolvedCounselorId]);
+      if (payload.eventType === "INSERT") {
+        setLiveMessages((prev) => prev + 1);
+      } else if (payload.eventType === "UPDATE") {
+        setLiveMessages((prev) => Math.max(0, prev - 1));
+      }
+    },
+  });
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 py-1">

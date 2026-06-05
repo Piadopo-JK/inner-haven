@@ -21,7 +21,7 @@ import {
 import { useCounselors } from "@/lib/query/hooks/useCounselors";
 import { availabilityForMonthQueryOptions } from "@/lib/query/queries";
 import { useSaveAppointment } from "@/lib/query/hooks/useAppointments";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import CounselorProfileCard from "@/components/appointments/CounselorProfileCard";
 import AvailableSlotsGrid from "@/components/appointments/AvailableSlotsGrid";
 import SessionFormatSelection from "@/components/appointments/SessionFormatSelection";
@@ -161,43 +161,37 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
   }, [selectedCounselorId, selectedDate, availabilityData]);
 
   // Supabase realtime: invalidate availability on appointment / schedule table changes
-  React.useEffect(() => {
-    if (!selectedCounselorId || !selectedDate) return;
+  useRealtimeChannel({
+    channelPrefix: `booking-form-${selectedCounselorId}`,
+    tables: ["appointments"],
+    onEvent: (payload) => {
+      const nextRow = (payload.new ?? {}) as Record<string, unknown>;
+      const previousRow = (payload.old ?? {}) as Record<string, unknown>;
 
-    const selectedDateIso = formatDateOnly(selectedDate);
-    const supabase = createClient();
+      const rowCounselorId = (nextRow.counselor_id ?? previousRow.counselor_id) as string | undefined;
+      if (rowCounselorId !== selectedCounselorId) return;
 
-    const channel = supabase
-      .channel(`booking-form-rt-${selectedCounselorId}-${crypto.randomUUID().slice(0, 8)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "appointments" },
-        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
-          const nextRow = (payload.new ?? {}) as Record<string, unknown>;
-          const previousRow = (payload.old ?? {}) as Record<string, unknown>;
+      const nextStatus = nextRow.status as string | undefined;
+      const previousStatus = previousRow.status as string | undefined;
 
-          const rowCounselorId = (nextRow.counselor_id ?? previousRow.counselor_id) as string | undefined;
-          if (rowCounselorId !== selectedCounselorId) return;
-
-          const nextStatus = nextRow.status as string | undefined;
-          const previousStatus = previousRow.status as string | undefined;
-
-          if (nextStatus !== previousStatus || payload.eventType === "INSERT" || payload.eventType === "DELETE") {
-            void invalidateAvailability(selectedCounselorId);
-            if (
-              (nextRow.appointment_date as string | undefined) === selectedDateIso ||
-              (previousRow.appointment_date as string | undefined) === selectedDateIso
-            ) {
-              setSlots([]);
-              setScheduleSummary(undefined);
-            }
+      if (nextStatus !== previousStatus || payload.eventType === "INSERT" || payload.eventType === "DELETE") {
+        void invalidateAvailability(selectedCounselorId);
+        if (selectedDate) {
+          const selectedDateIso = formatDateOnly(selectedDate);
+          if (
+            (nextRow.appointment_date as string | undefined) === selectedDateIso ||
+            (previousRow.appointment_date as string | undefined) === selectedDateIso
+          ) {
+            setSlots([]);
+            setScheduleSummary(undefined);
           }
-        },
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
-  }, [selectedCounselorId, selectedDate, invalidateAvailability]);
+        }
+      }
+    },
+    onError: () => {
+      void invalidateAvailability(selectedCounselorId);
+    },
+  });
 
   const selectedCounselor = counselors.find((c) => c.counselor_id === selectedCounselorId);
 
@@ -220,8 +214,22 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
       setError("Please confirm booking manually from the button.");
       return;
     }
-    if (!selectedCounselorId || !selectedDate || !selectedTime || !sessionMode) {
-      setError("Please complete all selections.");
+    // Prevent double-submission if the disabled button guard is bypassed
+    if (isSaving || isRedirectingAfterConfirm) return;
+    if (!selectedCounselorId) {
+      setError("Please select a counselor to continue.");
+      return;
+    }
+    if (!selectedDate) {
+      setError("Please pick a date for your session.");
+      return;
+    }
+    if (!selectedTime) {
+      setError("Please select an available time slot.");
+      return;
+    }
+    if (!sessionMode) {
+      setError("Please choose a session format (In-Person or Online).");
       return;
     }
 
@@ -236,7 +244,7 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
     setIsRedirectingAfterConfirm(true);
 
     try {
-      await saveAppointment({
+      const appointment = await saveAppointment({
         appointmentId: initialAppointment?.appointment_id,
         counselorId: selectedCounselorId,
         appointmentDate: formatDateOnly(selectedDate),
@@ -248,7 +256,20 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
       setSuccess(initialAppointment ? "Your appointment has been updated!" : "Your session has been successfully requested!");
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
       redirectTimeoutRef.current = setTimeout(() => {
-        router.push(initialAppointment ? `/appointments/${initialAppointment.appointment_id}` : "/dashboard");
+        if (initialAppointment) {
+          router.push(`/appointments/${initialAppointment.appointment_id}`);
+        } else {
+          const params = new URLSearchParams({
+            booked: "true",
+            date: appointment.appointment_date,
+            time: appointment.appointment_time.slice(0, 5),
+            mode: appointment.mode,
+          });
+          if (selectedCounselor?.name) {
+            params.set("counselor", selectedCounselor.name);
+          }
+          router.push(`/dashboard?${params.toString()}`);
+        }
       }, 2000);
     } catch (err) {
       setIsRedirectingAfterConfirm(false);
@@ -340,6 +361,7 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                     onSelect={setSelectedDate}
                     month={viewMonth}
                     onMonthChange={setViewMonth}
+                    disabled={{ before: new Date() }}
                     className="w-full"
                   />
                   {scheduleSummary && scheduleSummary.source !== "none" ? (

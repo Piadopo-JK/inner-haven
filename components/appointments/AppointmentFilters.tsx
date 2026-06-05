@@ -25,6 +25,7 @@ const COMPLETED_TAB_STATUSES: AppointmentStatus[] = [
   "completed",
   "cancelled",
   "expired",
+  "rescheduled",
 ];
 
 const STATUS_LABELS: Record<AppointmentStatus, string> = {
@@ -33,6 +34,7 @@ const STATUS_LABELS: Record<AppointmentStatus, string> = {
   completed: "Completed",
   cancelled: "Cancelled",
   expired: "Expired",
+  rescheduled: "Rescheduled",
 };
 
 export const DEFAULT_FILTERS: AppointmentFiltersState = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import { debouncedInvalidate } from "@/lib/query/debounce-invalidate";
 
 interface NotificationBellProps {
@@ -57,33 +57,23 @@ export default function NotificationBell({
     staleTime: 30_000,
   });
 
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`notifications-${role}-${userId}-${crypto.randomUUID().slice(0, 8)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
-          const row = ((payload.new ?? payload.old) as {
-            recipient_id?: string;
-            recipient_role?: SessionRole;
-          }) ?? {};
+  useRealtimeChannel({
+    channelPrefix: `notifications-${role}-${userId}`,
+    tables: ["notifications"],
+    onEvent: (payload) => {
+      const row = ((payload.new ?? payload.old) as {
+        recipient_id?: string;
+        recipient_role?: SessionRole;
+      }) ?? {};
 
-          const matchId = resolvedUserId ?? userId;
-          if (row.recipient_id !== matchId || row.recipient_role !== role) {
-            return;
-          }
+      const matchId = resolvedUserId ?? userId;
+      if (row.recipient_id !== matchId || row.recipient_role !== role) {
+        return;
+      }
 
-          void debouncedInvalidate(queryClient, { queryKey: notificationsQueryKey });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [notificationsQueryKey, queryClient, role, userId]);
+      void debouncedInvalidate(queryClient, { queryKey: notificationsQueryKey });
+    },
+  });
 
   const recentNotifications = allNotifications.slice(0, 5);
   const liveUnreadCount = allNotifications.reduce(
