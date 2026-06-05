@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
 import { createApiError, readResponsePayload } from "@/lib/query/http";
 import { queryKeys, sessionNotesQueryOptions } from "@/lib/query/queries";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import type { SessionNoteDTO } from "@/lib/booking/contracts";
 
 type SaveSessionNotesInput = {
@@ -84,48 +83,23 @@ export function useSaveSessionNotes(appointmentId: string) {
 export function useSessionNotesRealtimeSync(appointmentId: string) {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!appointmentId) return;
+  useRealtimeChannel({
+    channelPrefix: `session-notes-${appointmentId}`,
+    tables: ["session_notes", "appointments"],
+    onEvent: (payload) => {
+      const row = (payload.new ?? payload.old ?? {}) as Record<string, unknown>;
+      const rowId = row.appointment_id as string | undefined;
+      if (rowId !== appointmentId) return;
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`session-notes-rt-${appointmentId}-${crypto.randomUUID().slice(0, 8)}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "session_notes",
-        },
-        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
-          const rowId = ((payload.new ?? payload.old) as Record<string, unknown>).appointment_id as string | undefined;
-          if (rowId !== appointmentId) return;
-
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.sessionNotes(appointmentId),
-          });
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "appointments",
-        },
-        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
-          const rowId = ((payload.new ?? payload.old) as Record<string, unknown>).appointment_id as string | undefined;
-          if (rowId !== appointmentId) return;
-
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.appointmentDetails(appointmentId),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [appointmentId, queryClient]);
+      if (payload.table === "session_notes") {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.sessionNotes(appointmentId),
+        });
+      } else {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.appointmentDetails(appointmentId),
+        });
+      }
+    },
+  });
 }

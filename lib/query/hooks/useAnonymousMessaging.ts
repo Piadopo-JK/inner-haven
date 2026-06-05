@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { createClient } from "@/lib/supabase/client";
 import { readJsonResponse } from "@/lib/query/http";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import type {
   AnonymousSender,
   AnonymousThreadMessage,
@@ -96,48 +95,25 @@ export function useAnonymousIdentity() {
 export function useAnonymousIdentityRealtimeSync(ownerAuthUserId?: string) {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!ownerAuthUserId) {
-      return;
-    }
+  useRealtimeChannel({
+    channelPrefix: `anonymous-student-${ownerAuthUserId ?? "anon"}`,
+    tables: ["anonymous_threads"],
+    filters: ownerAuthUserId ? { anonymous_threads: `owner_auth_user_id=eq.${ownerAuthUserId}` } : undefined,
+    onEvent: (payload) => {
+      if (isLastSeenAtOnlyUpdate(payload)) return;
 
-    const key = queryKeys.anonymousIdentity();
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`anonymous-student-threads-${ownerAuthUserId}-${crypto.randomUUID().slice(0, 8)}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "anonymous_threads",
-          filter: `owner_auth_user_id=eq.${ownerAuthUserId}`,
-        },
-        (payload: { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> }) => {
-          if (
-            isLastSeenAtOnlyUpdate(payload)
-          ) {
-            return;
-          }
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousIdentity(),
+      });
 
-          void queryClient.invalidateQueries({
-            queryKey: key,
-          });
-
-          const threadId = (payload.new as Record<string, unknown>)?.id as string | undefined;
-          if (threadId) {
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.anonymousThreadMessages(threadId),
-            });
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [ownerAuthUserId, queryClient]);
+      const threadId = (payload.new as Record<string, unknown>)?.id as string | undefined;
+      if (threadId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.anonymousThreadMessages(threadId),
+        });
+      }
+    },
+  });
 }
 
 export function useCreateAnonymousThread() {
@@ -230,43 +206,24 @@ export function useAnonymousCounselorThreads() {
 export function useCounselorAnonymousThreadsRealtimeSync() {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const key = queryKeys.anonymousCounselorThreads();
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`anonymous-counselor-threads-${crypto.randomUUID().slice(0, 8)}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "anonymous_threads",
-        },
-        (payload: { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> }) => {
-          if (
-            isLastSeenAtOnlyUpdate(payload)
-          ) {
-            return;
-          }
+  useRealtimeChannel({
+    channelPrefix: "anonymous-counselor-threads",
+    tables: ["anonymous_threads"],
+    onEvent: (payload) => {
+      if (isLastSeenAtOnlyUpdate(payload)) return;
 
-          void queryClient.invalidateQueries({
-            queryKey: key,
-          });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousCounselorThreads(),
+      });
 
-          const threadId = (payload.new as Record<string, unknown>)?.id as string | undefined;
-          if (threadId) {
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.anonymousThreadMessages(threadId),
-            });
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
+      const threadId = (payload.new as Record<string, unknown>)?.id as string | undefined;
+      if (threadId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.anonymousThreadMessages(threadId),
+        });
+      }
+    },
+  });
 }
 
 export function useAnonymousThreadMessages(threadId: string) {
