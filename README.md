@@ -14,9 +14,20 @@
 | IH.010.004            | 2026-03-25    |
 | IH.010.005            | 2026-04-10    |
 | IH.010.006            | 2026-04-28    |
+| IH.010.007            | 2026-06-07    |
 | ...                   | ...           |
 
 ---
+## [IH.010.007](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+- Added counselor session notes with note management and appointment integration.
+- Migrated the application to TanStack Query, improving data fetching, caching, and loading states.
+- Introduced anonymous support messaging, including anonymous identities, counselor queues, and chat functionality.
+- Added a guided onboarding flow with profile creation checks and route guards.
+- Improved notifications, appointment synchronization, and overall application performance.
+- Strengthened security with Content Security Policy (CSP) enforcement and infrastructure updates.
+- Added comprehensive unit and integration test coverage across core application features.
+
 ## [IH.010.006](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
 - add booking, availability, counselor schedule, and settings API endpoints with updated server actions  for appointments and profile management
