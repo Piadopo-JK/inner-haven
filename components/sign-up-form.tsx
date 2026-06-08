@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -23,6 +24,7 @@ export function SignUpForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -112,7 +114,25 @@ export function SignUpForm({
                 />
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="terms"
+                  checked={agreedToTerms}
+                  onCheckedChange={(v) => setAgreedToTerms(Boolean(v))}
+                  className="mt-1"
+                />
+                <Label htmlFor="terms" className="text-sm font-normal leading-relaxed">
+                  I agree to the{" "}
+                  <Link href="/terms" className="underline underline-offset-4 text-primary" target="_blank">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="underline underline-offset-4 text-primary" target="_blank">
+                    Privacy Policy
+                  </Link>
+                </Label>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading || !agreedToTerms}>
                 {isLoading ? "Creating an account..." : "Sign up"}
               </Button>
               <div className="relative my-2">
@@ -129,6 +149,7 @@ export function SignUpForm({
                 type="button"
                 variant="outline"
                 className="w-full"
+                disabled={!agreedToTerms}
                 onClick={handleGoogleSignUp}
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
