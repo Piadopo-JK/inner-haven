@@ -11,18 +11,7 @@ import {
 } from "@/components/dashboard/DashboardRouteSkeletons";
 import { useAuthGuard } from "@/lib/query/hooks/useAuthGuard";
 
-type BookingConfirmation = {
-  date?: string;
-  time?: string;
-  mode?: string;
-  counselor?: string;
-} | null;
-
-export default function DashboardShell({
-  bookingConfirmation,
-}: {
-  bookingConfirmation?: BookingConfirmation;
-}) {
+export default function DashboardShell() {
   const guard = useAuthGuard();
 
   if (guard.status === "loading" || guard.status === "unauthenticated") {
@@ -57,7 +46,6 @@ export default function DashboardShell({
     <StudentDashboardClient
       studentId={guard.me.userId}
       userName={guard.me.name}
-      bookingConfirmation={bookingConfirmation}
     />
   );
 }
