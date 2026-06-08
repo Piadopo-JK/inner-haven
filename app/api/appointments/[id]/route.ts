@@ -15,7 +15,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const appointment = await bookingService.getAppointmentById(id);
+  const appointment = await bookingService.verifyAppointmentAccess(sessionUser, id);
   if (!appointment) {
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
   }
@@ -33,6 +33,21 @@ export async function PATCH(
   }
 
   const { id } = await params;
+
+  const appointment = await bookingService.verifyAppointmentAccess(sessionUser, id);
+  if (!appointment) {
+    return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+  }
+  if (appointment.status !== "pending") {
+    return NextResponse.json(
+      {
+        error: "This appointment can no longer be edited because it is no longer pending.",
+        code: "APPOINTMENT_NOT_EDITABLE",
+      },
+      { status: 409 },
+    );
+  }
+
   const body = (await request.json()) as BookingRequestDTO;
 
   try {

@@ -31,10 +31,10 @@ export default async function AppointmentDetailsPage({ params }: AppointmentDeta
   const { appointmentId } = await params;
 
   const [appointment, counselors, students, currentSessionNote] = await Promise.all([
-    getAppointmentByIdCached(sessionUser.role, sessionUser.userId, appointmentId),
+    getAppointmentByIdCached(sessionUser, appointmentId),
     sessionUser.role === "student" ? getCounselorsCached() : Promise.resolve([]),
     sessionUser.role === "counselor" ? getStudentsCached() : Promise.resolve([]),
-    getSessionNoteCached(sessionUser.role, sessionUser.userId, appointmentId),
+    getSessionNoteCached(sessionUser, appointmentId),
   ]);
 
   if (!appointment) redirect("/appointments");

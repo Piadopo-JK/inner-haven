@@ -2,7 +2,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 
 import { AppointmentDTO, CounselorDirectoryItemDTO, SessionNoteDTO, SessionRole, StudentDirectoryItemDTO } from "@/lib/booking/contracts";
-import { bookingService } from "@/lib/booking/service";
+import { bookingService, SessionUser } from "@/lib/booking/service";
 
 export function appointmentsListTag(role: SessionRole, authUserId: string) {
   return `appointments:list:${role}:${authUserId}`;
@@ -28,20 +28,21 @@ export const getAppointmentsByUserCached = cache(
 
 export const getAppointmentByIdCached = cache(
   async (
-    _role: SessionRole,
-    _authUserId: string,
+    sessionUser: SessionUser,
     appointmentId: string,
   ): Promise<AppointmentDTO | null> => {
-    return bookingService.getAppointmentById(appointmentId);
+    return bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   },
 );
 
 export const getSessionNoteCached = cache(
   async (
-    _role: SessionRole,
-    _authUserId: string,
+    sessionUser: SessionUser,
     appointmentId: string,
   ): Promise<SessionNoteDTO | null> => {
+    const hasAccess = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
+    if (!hasAccess) return null;
+
     const note = await bookingService.getSessionNote(appointmentId);
     return note ?? null;
   },
