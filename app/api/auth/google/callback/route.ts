@@ -19,20 +19,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code || !state) {
-    console.error("[google/callback] Missing code or state", { code: !!code, state: !!state });
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=missing_params`);
   }
 
   const sessionUser = await getSessionUser();
 
   if (!sessionUser || sessionUser.role !== "counselor") {
-    console.error("[google/callback] No counselor session", { userId: sessionUser?.userId, role: sessionUser?.role });
     return NextResponse.redirect(`${appUrl}/login`);
   }
 
   // validate if state matches the session counselor
   if (state !== sessionUser.userId) {
-    console.error("[google/callback] State mismatch", { state, userId: sessionUser.userId });
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=state_mismatch`);
   }
 
@@ -41,7 +38,6 @@ export async function GET(request: NextRequest) {
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
 
   if (!clientId || !clientSecret || !redirectUri) {
-    console.error("[google/callback] Missing env vars");
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=no_credentials`);
   }
 
@@ -50,13 +46,11 @@ export async function GET(request: NextRequest) {
   let tokens;
   try {
     ({ tokens } = await oauth2Client.getToken(code));
-  } catch (err) {
-    console.error("[google/callback] Token exchange failed", err);
+  } catch {
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=token_exchange`);
   }
 
   if (!tokens.refresh_token) {
-    console.error("[google/callback] No refresh_token returned — user may need to revoke app access at myaccount.google.com/permissions");
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=no_refresh_token`);
   }
 
@@ -70,7 +64,6 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
 
   if (lookupError || !counselorRow?.counselor_id) {
-    console.error("[google/callback] Counselor lookup failed", { userId: sessionUser.userId, lookupError });
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=counselor_not_found`);
   }
 
@@ -85,7 +78,6 @@ export async function GET(request: NextRequest) {
     .eq("counselor_id", counselorRow.counselor_id);
 
   if (upsertError) {
-    console.error("[google/callback] Failed to save Google token", upsertError);
     return NextResponse.redirect(`${dashboardUrl}?google=error&reason=upsert_failed`);
   }
 

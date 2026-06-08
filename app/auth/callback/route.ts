@@ -17,8 +17,7 @@ async function downloadAndUploadAvatar(
     const path = buildAvatarPath("student", authUserId, file);
     const uploaded = await uploadAvatarObject(path, file);
     return uploaded.publicUrl;
-  } catch (e) {
-    console.error("Failed to download Google avatar:", e);
+  } catch {
     return null;
   }
 }

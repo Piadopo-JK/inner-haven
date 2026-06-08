@@ -47,9 +47,9 @@ export function useRealtimeChannel({
 
     channel.subscribe((status: string, err?: Error) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        const message = err?.message ?? "Unknown realtime error";
-        console.error(`[realtime] ${channelPrefix}: ${status} — ${message}`, err ?? "(no error object)");
-        onErrorRef.current?.(err ?? new Error(message));
+        if (err) {
+          onErrorRef.current?.(err);
+        }
 
         const now = Date.now();
         const { count, lastAttempt } = retryState.current;

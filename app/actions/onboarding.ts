@@ -25,8 +25,7 @@ export async function setupStudentProfile(prevState: any, formData: FormData) {
       email: user.email,
       name: name.trim(),
     });
-  } catch (e) {
-    console.error("Error setting up profile:", e);
+  } catch {
     return { error: "Failed to create profile. Please try again." };
   }
 
