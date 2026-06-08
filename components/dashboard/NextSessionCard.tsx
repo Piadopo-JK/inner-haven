@@ -5,11 +5,31 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { AppointmentDTO } from "@/lib/booking/contracts";
 import { createClient } from "@/lib/supabase/client";
+import {
+  useUpdateCounselorAppointmentStatus,
+  useCancelStudentAppointment,
+} from "@/lib/query/hooks/useAppointments";
 
 const PRESENCE_TOPIC = "presence:counselors";
+
+function formatDisplayTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
 
 type NextSessionCardProps = {
   appointment?: AppointmentDTO;
@@ -17,6 +37,7 @@ type NextSessionCardProps = {
   participantAvatar?: string;
   todayIso: string;
   showParticipantOnlineStatus?: boolean;
+  role?: "student" | "counselor";
 };
 
 export default function NextSessionCard({
@@ -25,8 +46,19 @@ export default function NextSessionCard({
   participantAvatar,
   todayIso,
   showParticipantOnlineStatus = false,
+  role,
 }: NextSessionCardProps) {
   const [isCounselorOnline, setIsCounselorOnline] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const {
+    mutateAsync: updateCounselorStatus,
+    isPending: isCounselorUpdating,
+  } = useUpdateCounselorAppointmentStatus();
+  const { mutateAsync: cancelStudentAppointment, isPending: isStudentCancelling } =
+    useCancelStudentAppointment();
+
+  const isBusy = isCounselorUpdating || isStudentCancelling;
 
   useEffect(() => {
     if (!appointment?.counselor_id || !showParticipantOnlineStatus) {
@@ -108,6 +140,7 @@ export default function NextSessionCard({
   const isToday = appointment.appointment_date === todayIso;
   const dateStr = isToday ? "Today" : appointment.appointment_date;
   const detailsHref = `/appointments/${appointment.appointment_id}`;
+  const notesHref = `/appointments/${appointment.appointment_id}/notes`;
   const canJoinOnline = appointment.mode === "online" && !!appointment.meeting_link;
   const profileName = participantName || "Participant";
   const initials = profileName
@@ -120,6 +153,11 @@ export default function NextSessionCard({
 
   return (
     <div className="relative overflow-hidden bg-[var(--guidance-next-session-bg)] rounded-[1.5rem] p-5 md:p-6 flex flex-col md:flex-row items-center gap-4 text-white shadow-xl">
+      {actionError ? (
+        <div className="absolute top-3 right-3 rounded-xl bg-red-500/90 px-3 py-1.5 text-xs text-white font-medium">
+          {actionError}
+        </div>
+      ) : null}
       <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-white/20 overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
         {participantAvatar ? (
           <Image
@@ -150,7 +188,7 @@ export default function NextSessionCard({
         </h2>
         <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
           <p className="text-white opacity-80 text-base">
-            {participantName || "Your Participant"} • {dateStr} at {appointment.appointment_time}
+            {participantName || "Your Participant"} • {dateStr} at {formatDisplayTime(appointment.appointment_time)}
           </p>
           {showParticipantOnlineStatus && isCounselorOnline ? (
             <span
@@ -188,16 +226,63 @@ export default function NextSessionCard({
             {appointment.mode === "in_person" ? "In-Person Session" : "Link Unavailable"}
           </Button>
         )}
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white border-none"
-        >
-          <Link href={detailsHref} aria-label="Open session details">
-            <MoreVertical className="w-5 h-5" />
-          </Link>
-        </Button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white border-none"
+              aria-label="Session actions"
+              disabled={isBusy}
+            >
+              <MoreVertical className="w-5 h-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="rounded-xl">
+            {role === "counselor" ? (
+              <>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={() =>
+                    updateCounselorStatus({ appointmentId: appointment.appointment_id, status: "completed" }).catch(
+                      (err: Error) => setActionError(err.message),
+                    )
+                  }
+                  disabled={isBusy}
+                >
+                  {isBusy ? "Updating..." : "Mark Complete"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer text-[var(--md-sys-color-error)]"
+                  onSelect={() =>
+                    updateCounselorStatus({ appointmentId: appointment.appointment_id, status: "cancelled" }).catch(
+                      (err: Error) => setActionError(err.message),
+                    )
+                  }
+                  disabled={isBusy}
+                >
+                  {isBusy ? "Updating..." : "Cancel"}
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href={notesHref}>Session Notes</Link>
+                </DropdownMenuItem>
+              </>
+            ) : role === "student" ? (
+              <DropdownMenuItem
+                className="cursor-pointer text-[var(--md-sys-color-error)]"
+                onSelect={() => cancelStudentAppointment(appointment.appointment_id).catch(
+                  (err: Error) => setActionError(err.message),
+                )}
+                disabled={isBusy}
+              >
+                {isBusy ? "Cancelling..." : "Cancel"}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <Link href={detailsHref}>View Details</Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ type PulseBlockProps = {
   className: string;
 };
 
-function PulseBlock({ className }: PulseBlockProps) {
+export function PulseBlock({ className }: PulseBlockProps) {
   return (
     <div
       className={`animate-pulse rounded-2xl bg-[var(--md-sys-color-surface-container-high)] ${className}`}

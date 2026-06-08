@@ -11,7 +11,7 @@ async function resolveOwnedAppointment(appointmentId: string) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  const appointment = await bookingService.getAppointmentById(appointmentId);
+  const appointment = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   if (!appointment) {
     return { error: NextResponse.json({ error: "Appointment not found" }, { status: 404 }) };
   }

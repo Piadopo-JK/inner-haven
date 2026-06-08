@@ -67,8 +67,8 @@ export function makeQueryClient() {
       queries: {
         // serve cache immediately, revalidate in background
         staleTime: 60_000,
-        gcTime: 5 * 60_000,//5min
-        refetchOnWindowFocus: true,
+        gcTime: 30 * 60_000, // 30min — keep dashboard data alive across longer visits to other pages
+        refetchOnWindowFocus: false,
         refetchOnReconnect: true,
         retry: (failureCount, error) => {
           if (isAuthExpiredError(error)) {

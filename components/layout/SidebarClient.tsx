@@ -166,6 +166,7 @@ function LogoRow({ expanded }: { expanded: boolean }) {
           src="/assets/IconRet.png"
           alt="GuidanceGO logo"
           fill
+          sizes="74px"
           className="object-contain"
           priority
         />

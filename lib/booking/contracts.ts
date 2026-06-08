@@ -1,5 +1,10 @@
 export type SessionMode = "in_person" | "online";
-export type AppointmentStatus = "pending" | "approved" | "cancelled" | "completed" | "expired";
+export type AppointmentStatus = "pending" | "approved" | "cancelled" | "completed" | "expired" | "rescheduled";
+export const ACTIVE_STATUSES: AppointmentStatus[] = ["approved", "pending", "rescheduled"];
+export function isConfirmed(status: AppointmentStatus): boolean {
+  return status === "approved" || status === "rescheduled";
+}
+
 export type SessionRole = "student" | "counselor";
 
 export type NotificationType =
@@ -20,6 +25,7 @@ export type CounselorDirectoryItemDTO = {
   office_room: string;
   about?: string;
   avatar_url?: string;
+  hero_card_url?: string;
 };
 
 export type StudentDirectoryItemDTO = {

@@ -1,5 +1,4 @@
 import {
-  CircleHelp,
   CalendarDays,
   LayoutDashboard,
   LogOut,
@@ -47,9 +46,9 @@ export const primaryNavItems: NavItem[] = [
   },
   {
     id: "anonymous-queue",
-    label: "Anonymous Queue",
-    href: "/anonymous-requests",
-    icon: CircleHelp,
+    label: "Messaging",
+    href: "/messaging",
+    icon: MessageSquare,
     roles: ["counselor"],
   },
 ];

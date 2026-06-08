@@ -1,19 +1,30 @@
 "use client";
 
-import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { MoreVertical, Search, UserRound } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { AnonymousThreadSummary } from "@/components/anonymous/types";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   threads: AnonymousThreadSummary[];
   selectedThreadId?: string;
   onSelect: (threadId: string) => void;
   anonymousView?: boolean;
+  onRemove?: (threadId: string) => void;
+  onNewConversation?: () => void;
 };
 
-export default function ThreadList({ threads, selectedThreadId, onSelect, anonymousView = false }: Props) {
+export default function ThreadList({ threads, selectedThreadId, onSelect, anonymousView = false, onRemove, onNewConversation }: Props) {
   const [query, setQuery] = useState("");
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -23,6 +34,13 @@ export default function ThreadList({ threads, selectedThreadId, onSelect, anonym
       return title.toLowerCase().includes(q) || (thread.lastMessagePreview ?? "").toLowerCase().includes(q);
     });
   }, [anonymousView, query, threads]);
+
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 82,
+    overscan: 5,
+  });
 
   const formatRelative = (value?: string) => {
     if (!value) return "";
@@ -34,7 +52,7 @@ export default function ThreadList({ threads, selectedThreadId, onSelect, anonym
     if (hours < 24) return `${hours}h ago`;
     if (hours < 48) return "Yesterday";
     return new Date(value).toLocaleDateString();
-  };
+  }
 
   if (threads.length === 0) {
     return (
@@ -47,14 +65,14 @@ export default function ThreadList({ threads, selectedThreadId, onSelect, anonym
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-2">
       <label
-        className="flex items-center gap-2 rounded-full border px-3 py-2"
+        className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-2"
         style={{
           borderColor: "var(--md-sys-color-outline-variant)",
-          background: "var(--md-sys-color-surface-container-high)",
+          background: "var(--md-sys-color-surface-container-low)",
           color: "var(--md-sys-color-on-surface-variant)",
         }}
       >
-        <Search className="h-4 w-4" />
+        <Search className="h-4 w-4 shrink-0" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -63,40 +81,117 @@ export default function ThreadList({ threads, selectedThreadId, onSelect, anonym
         />
       </label>
 
-      <div className="min-h-0 overflow-y-auto">
-        <div className="grid gap-1.5 pr-1">
-          {filtered.map((thread) => {
+      <div ref={listRef} className="min-h-0 overflow-y-auto">
+        <div
+          style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const thread = filtered[virtualItem.index]!;
             const active = selectedThreadId === thread.id;
+
             return (
-              <button
+              <div
                 key={thread.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(thread.id)}
-                className="w-full rounded-xl px-3 py-3 text-left transition-colors"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(thread.id); } }}
+                className="absolute left-0 top-0 w-full rounded-r-xl px-3 py-3 text-left transition-colors border-l-[3px] cursor-pointer"
                 style={{
-                  borderColor: "transparent",
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                  borderLeftColor: active
+                    ? "var(--msg-thread-active-accent)"
+                    : "transparent",
                   background: active
-                    ? "color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--md-sys-color-surface-container-high))"
-                    : "var(--md-sys-color-surface-container-low)",
+                    ? "var(--msg-thread-active-bg)"
+                    : "transparent",
                   boxShadow: active
-                    ? "inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary) 55%, transparent)"
+                    ? "var(--md-sys-elevation-level2)"
                     : "none",
                 }}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold" style={{ color: "var(--md-sys-color-on-surface)" }}>
-                    {anonymousView ? thread.anonymousLabel : thread.counselorName}
-                  </p>
-                  <span className="text-[11px]" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                    {formatRelative(thread.lastMessageAt ?? thread.updatedAt)}
-                  </span>
+                <div className="flex items-center gap-3">
+                  {!anonymousView && thread.counselorAvatarUrl ? (
+                    <img
+                      src={thread.counselorAvatarUrl}
+                      alt={thread.counselorName}
+                      className="h-10 w-10 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                      style={{
+                        background: anonymousView
+                          ? "var(--md-sys-color-surface-container-highest)"
+                          : active
+                            ? "var(--md-sys-color-primary-container)"
+                            : "var(--md-sys-color-secondary-container)",
+                        color: anonymousView
+                          ? "var(--md-sys-color-on-surface-variant)"
+                          : active
+                            ? "var(--md-sys-color-on-primary-container)"
+                            : "var(--md-sys-color-on-secondary-container)",
+                      }}
+                    >
+                    {anonymousView ? (
+                      <UserRound className="h-5 w-5" />
+                    ) : (
+                      <span className="text-sm font-semibold">
+                        {thread.counselorName.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold" style={{ color: "var(--msg-name-color)" }}>
+                      {anonymousView ? thread.anonymousLabel : thread.counselorName}
+                    </p>
+                    {thread.lastMessagePreview ? (
+                      <p className="mt-0.5 line-clamp-1 text-xs" style={{ color: "var(--msg-preview-color)" }}>
+                        {thread.lastMessagePreview}
+                      </p>
+                    ) : null}
+                    <p className="mt-0.5 text-[11px]" style={{ color: "var(--msg-timestamp-color)" }} suppressHydrationWarning>
+                      {formatRelative(thread.lastMessageAt ?? thread.updatedAt)}
+                    </p>
+                  </div>
+                  {onRemove || onNewConversation ? (
+                    <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Thread actions"
+                            className="h-8 w-8 rounded-full"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-xl">
+                          {onNewConversation ? (
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onSelect={() => onNewConversation()}
+                            >
+                              New conversation
+                            </DropdownMenuItem>
+                          ) : null}
+                          {onRemove ? (
+                            <DropdownMenuItem
+                              className="cursor-pointer text-[var(--md-sys-color-error)]"
+                              onSelect={() => onRemove(thread.id)}
+                            >
+                              Remove
+                            </DropdownMenuItem>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : null}
                 </div>
-                {thread.lastMessagePreview ? (
-                  <p className="mt-1 line-clamp-2 text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
-                    {thread.lastMessagePreview}
-                  </p>
-                ) : null}
-              </button>
+              </div>
             );
           })}
 

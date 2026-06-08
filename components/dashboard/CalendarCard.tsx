@@ -4,11 +4,22 @@ import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { AppointmentDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, isConfirmed } from "@/lib/booking/contracts";
+import { cn } from "@/lib/utils";
 
 type CalendarCardProps = {
   appointments?: AppointmentDTO[];
 };
+
+function formatDisplayTime(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
 
 export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
@@ -50,15 +61,16 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
   }, [popupDate, month]);
 
   React.useEffect(() => {
-    if (!popupDate) return;
+    if (!popupDate && !date) return;
     function handleClick(e: MouseEvent) {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setPopupDate(null);
+        setDate(undefined);
       }
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [popupDate]);
+  }, [popupDate, date]);
 
   function handleSelect(d: Date | undefined) {
     setDate(d);
@@ -103,9 +115,15 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
         classNames={{
           month_grid: "w-full border-collapse",
           weekday: "text-[var(--md-sys-color-on-surface)] font-bold text-xs uppercase tracking-widest h-10",
-          day_button: "h-7 w-7 rounded-lg transition-all font-medium text-[var(--md-sys-color-on-surface)] bg-transparent hover:bg-[var(--md-sys-color-surface-container)]",
-          selected: "rounded-lg bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)] hover:text-[var(--md-sys-color-on-primary)]",
-          today: "rounded-lg bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)] font-bold",
+          day_button: cn(
+            "mx-auto h-7 w-7 rounded-lg transition-all font-medium text-[var(--md-sys-color-on-surface)] bg-transparent",
+            "hover:bg-[var(--md-sys-color-surface-container)]",
+            "[.day-today_&]:bg-[var(--md-sys-color-primary-container)] [.day-today_&]:text-[var(--md-sys-color-on-primary-container)] [.day-today_&]:font-bold",
+            "[.day-selected_&]:bg-[var(--md-sys-color-primary)] [.day-selected_&]:text-[var(--md-sys-color-on-primary)]",
+            "[.day-selected_&]:hover:bg-[var(--md-sys-color-primary)] [.day-selected_&]:hover:text-[var(--md-sys-color-on-primary)]",
+          ),
+          selected: "day-selected",
+          today: "day-today",
           outside: "text-[var(--md-sys-color-on-surface-variant)] opacity-60",
         }}
         modifiers={{
@@ -134,7 +152,7 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
                   key={a.appointment_id}
                   className="flex items-center gap-2 rounded-lg px-2 py-1.5"
                   style={{
-                    background: a.status === "approved"
+                    background: isConfirmed(a.status)
                       ? "var(--md-sys-color-primary-container)"
                       : a.status === "completed"
                       ? "var(--md-sys-color-secondary-container)"
@@ -144,14 +162,14 @@ export default function CalendarCard({ appointments = [] }: CalendarCardProps) {
                   <span
                     className="text-xs font-medium"
                     style={{
-                      color: a.status === "approved"
+                      color: isConfirmed(a.status)
                         ? "var(--md-sys-color-on-primary-container)"
                         : a.status === "completed"
                         ? "var(--md-sys-color-on-secondary-container)"
                         : "var(--md-sys-color-on-tertiary-container)",
                     }}
                   >
-                    {a.appointment_time.slice(0, 5)}
+                    {formatDisplayTime(a.appointment_time)}
                   </span>
                   <span className="flex-1 text-xs truncate" style={{ color: "var(--md-sys-color-on-surface)" }}>
                     {a.reason_preview || a.reason}

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import Sidebar from "@/components/layout/Sidebar";
+import Footer from "@/components/layout/Footer";
 import Navbar from "@/components/nav/Navbar";
 import { SidebarProvider } from "@/lib/context/sidebar-context";
 import QueryClientProvider from "@/components/providers/QueryClientProvider";
@@ -58,8 +59,7 @@ export default function RootLayout({
         <QueryClientProvider>
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
-            enableSystem
+            defaultTheme="light"
             disableTransitionOnChange
           >
             <SidebarProvider>
@@ -70,6 +70,7 @@ export default function RootLayout({
                   <div className="flex min-h-0 flex-1 flex-col" id="main-content">
                     {children}
                   </div>
+                  <Footer />
                 </div>
               </div>
             </SidebarProvider>

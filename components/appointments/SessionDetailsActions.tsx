@@ -8,9 +8,9 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Md3Message } from "@/components/ui/md3-message";
-import { SessionNoteDTO } from "@/lib/booking/contracts";
+import { SessionNoteDTO, isConfirmed, type AppointmentStatus } from "@/lib/booking/contracts";
 import { queryKeys } from "@/lib/query/queries";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import { useAppointmentDetails } from "@/lib/query/hooks/useAppointmentDetails";
 import {
   useCancelCounselorAppointment,
@@ -26,9 +26,10 @@ export const STATUS_STYLES: Record<string, { bg: string; color: string; label: s
   cancelled: { bg: "var(--md-sys-color-error-container)", color: "var(--md-sys-color-on-error-container)", label: "Cancelled" },
   completed: { bg: "var(--md-sys-color-primary-container)", color: "var(--md-sys-color-on-primary-container)", label: "Completed" },
   expired:   { bg: "var(--md-sys-color-surface-container-high)", color: "var(--md-sys-color-on-surface-variant)", label: "Expired" },
+  rescheduled: { bg: "var(--md-sys-color-tertiary-container)", color: "var(--md-sys-color-on-tertiary-container)", label: "Rescheduled" },
 };
 
-type MinimalAppointment = { appointment_id: string; status: string };
+type MinimalAppointment = { appointment_id: string; status: AppointmentStatus };
 
 export function SessionStatusPill({
   appointmentId,
@@ -65,7 +66,7 @@ type SessionDetailsActionsProps = {
     reason: string;
     reason_preview: string;
     mode: "in_person" | "online";
-    status: "pending" | "approved" | "cancelled" | "completed" | "expired";
+    status: "pending" | "approved" | "cancelled" | "completed" | "expired" | "rescheduled";
     created_at: string;
     updated_at: string;
     meeting_link?: string;
@@ -94,7 +95,8 @@ export default function SessionDetailsActions({
   const { mutateAsync: updateAppointmentStatus, isPending: isUpdatingStatus } = useUpdateCounselorAppointmentStatus();
   const { mutateAsync: rescheduleAppointment, isPending: isRescheduling } = useRescheduleCounselorAppointment();
   const notesHref = `/appointments/${appointment.appointment_id}/notes`;
-  const [activeAction, setActiveAction] = useState<"approve" | "cancel" | "reschedule" | null>(null);
+  const [activeAction, setActiveAction] = useState<"approve" | "cancel" | "complete" | "reschedule" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"approve" | "cancel" | "complete" | null>(null);
   const [isRescheduleOpen, setIsRescheduleOpen] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState(appointment.appointment_date);
   const [rescheduleTime, setRescheduleTime] = useState(appointment.appointment_time.slice(0, 5));
@@ -106,45 +108,33 @@ export default function SessionDetailsActions({
     setRescheduleTime(appointment.appointment_time.slice(0, 5));
   }, [appointment.appointment_date, appointment.appointment_time]);
 
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`appointment-details-${appointmentId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "appointments",
-          filter: `appointment_id=eq.${appointmentId}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.appointmentDetails(appointmentId),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [appointmentId, queryClient]);
+  useRealtimeChannel({
+    channelPrefix: `appointment-detail-${appointmentId}`,
+    tables: ["appointments"],
+    onEvent: (payload) => {
+      const row = (payload.new ?? payload.old ?? {}) as Record<string, unknown>;
+      if ((row.appointment_id as string | undefined) !== appointmentId) return;
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.appointmentDetails(appointmentId),
+      });
+    },
+  });
 
   const isBusy = isStudentCancelling || isCounselorCancelling || isUpdatingStatus || isRescheduling;
 
   const canCancel =
-    appointment.status === "pending" || appointment.status === "approved";
+    appointment.status === "pending" || isConfirmed(appointment.status);
   const isPending = appointment.status === "pending";
-  const isApproved = appointment.status === "approved";
+  const isApproved = isConfirmed(appointment.status);
   const canOpenSessionFeedback =
     role === "counselor" &&
-    (appointment.status === "approved" || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
+    (isConfirmed(appointment.status) || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
   const canViewSessionNotes =
     role === "student" &&
     Boolean(sessionNote) &&
-    (appointment.status === "approved" || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
-  const canJoinOnline = appointment.mode === "online";
+    (isConfirmed(appointment.status) || appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "expired");
+  const canJoinOnline = appointment.mode === "online" && isConfirmed(appointment.status) && Boolean(appointment.meeting_link);
+  const canComplete = role === "counselor" && isApproved;
   const canStudentEdit = role === "student" && isPending;
   const studentEditHref = `/appointments/${appointment.appointment_id}/edit`;
 
@@ -165,6 +155,7 @@ export default function SessionDetailsActions({
       handleMutationError(err);
     } finally {
       setActiveAction(null);
+      setConfirmAction(null);
     }
   }
 
@@ -187,6 +178,22 @@ export default function SessionDetailsActions({
       handleMutationError(err);
     } finally {
       setActiveAction(null);
+      setConfirmAction(null);
+    }
+  }
+
+  async function handleComplete() {
+    setActiveAction("complete");
+    setError("");
+    setShowReconnectGoogle(false);
+    try {
+      await updateAppointmentStatus({ appointmentId: appointment.appointment_id, status: "completed" });
+      router.refresh();
+    } catch (err) {
+      handleMutationError(err);
+    } finally {
+      setActiveAction(null);
+      setConfirmAction(null);
     }
   }
 
@@ -234,7 +241,7 @@ export default function SessionDetailsActions({
           <>
             {isPending ? (
               <Button
-                onClick={handleApprove}
+                onClick={() => setConfirmAction("approve")}
                 disabled={isBusy}
                 className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold"
                 style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
@@ -242,16 +249,17 @@ export default function SessionDetailsActions({
                 <CheckCircle className="w-4 h-4" />
                 {activeAction === "approve" ? "Accepting..." : "Accept"}
               </Button>
-            ) : (
+            ) : canComplete ? (
               <Button
-                disabled
-                className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold opacity-40 cursor-not-allowed"
-                style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+                onClick={() => setConfirmAction("complete")}
+                disabled={isBusy}
+                className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold"
+                style={{ background: "var(--md-sys-color-primary-container)", color: "var(--md-sys-color-on-primary-container)" }}
               >
                 <CheckCircle className="w-4 h-4" />
-                {isApproved ? "Accepted" : "Status Finalized"}
+                {activeAction === "complete" ? "Completing..." : "Mark Complete"}
               </Button>
-            )}
+            ) : null}
 
             {isPending ? (
               <Button
@@ -276,10 +284,10 @@ export default function SessionDetailsActions({
               </Button>
             ) : null}
 
-            {isPending ? (
+            {canCancel ? (
               <Button
                 variant="outline"
-                onClick={handleCancel}
+                onClick={() => setConfirmAction("cancel")}
                 disabled={isBusy}
                 className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold"
                 style={{ background: "var(--md-sys-color-surface)", borderColor: "var(--md-sys-color-error-container)", color: "var(--md-sys-color-error)" }}
@@ -287,20 +295,22 @@ export default function SessionDetailsActions({
                 <X className="w-4 h-4" />
                 {activeAction === "cancel" ? "Cancelling..." : "Cancel"}
               </Button>
-            ) : (
+            ) : null}
+
+            {canOpenSessionFeedback && !isPending ? (
               <Button
                 asChild
                 variant="outline"
-                disabled={!canOpenSessionFeedback || isBusy}
+                disabled={isBusy}
                 className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold"
-                style={{ background: "var(--md-sys-color-surface)", borderColor: "var(--md-sys-color-error-container)", color: "var(--md-sys-color-error)" }}
+                style={{ background: "var(--md-sys-color-surface)", borderColor: "var(--md-sys-color-outline-variant)", color: "var(--md-sys-color-primary)" }}
               >
                 <Link href={notesHref}>
                   <ClipboardCheck className="w-4 h-4" />
                   Session Feedback
                 </Link>
               </Button>
-            )}
+            ) : null}
           </>
         ) : (
           <>
@@ -331,7 +341,7 @@ export default function SessionDetailsActions({
             {canCancel ? (
               <Button
                 variant="outline"
-                onClick={handleCancel}
+                onClick={() => setConfirmAction("cancel")}
                 disabled={isBusy}
                 className="h-14 w-full flex items-center justify-center gap-2 rounded-xl px-5 font-semibold"
                 style={{ background: "var(--md-sys-color-surface)", borderColor: "var(--md-sys-color-error-container)", color: "var(--md-sys-color-error)" }}
@@ -351,9 +361,7 @@ export default function SessionDetailsActions({
                   View Session Notes
                 </Link>
               </Button>
-            ) : (
-              <div />
-            )}
+            ) : null}
           </>
         )}
       </div>
@@ -398,6 +406,49 @@ export default function SessionDetailsActions({
           </Button>
         </div>
       ) : null}
+
+      {confirmAction && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => setConfirmAction(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setConfirmAction(null); }}>
+            <div
+              className="w-full max-w-sm rounded-2xl border p-6 text-center shadow-xl"
+              style={{
+                borderColor: "var(--md-sys-color-outline-variant)",
+                background: "var(--md-sys-color-surface-container-high)",
+              }}
+            >
+              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                {confirmAction === "cancel"
+                  ? "Cancel this appointment?"
+                  : confirmAction === "approve"
+                  ? "Accept this appointment?"
+                  : "Mark this appointment as complete?"}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "var(--md-sys-color-on-surface-variant)" }}>
+                {confirmAction === "cancel"
+                  ? "This action cannot be undone."
+                  : confirmAction === "approve"
+                  ? "The student will be notified."
+                  : "The session will be marked as finished."}
+              </p>
+              <div className="flex justify-center gap-3 mt-4">
+                <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)} className="rounded-xl">Back</Button>
+                <Button
+                  size="sm"
+                  onClick={confirmAction === "cancel" ? handleCancel : confirmAction === "approve" ? handleApprove : handleComplete}
+                  className="rounded-xl"
+                  style={confirmAction === "cancel"
+                    ? { background: "var(--md-sys-color-error)", color: "var(--md-sys-color-on-error)" }
+                    : { background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+                >
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

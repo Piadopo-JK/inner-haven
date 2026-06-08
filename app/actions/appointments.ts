@@ -19,13 +19,13 @@ export async function updateAppointmentStatusAction(
     throw new Error("Unauthorized");
   }
 
-  const appointment = await bookingService.getAppointmentById(appointmentId);
+  const appointment = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   if (!appointment) {
     throw new Error("Forbidden");
   }
 
   try {
-    await bookingService.updateAppointmentStatus(appointmentId, status);
+    await bookingService.updateAppointmentStatus(appointmentId, status, "counselor");
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
 
@@ -53,7 +53,7 @@ export async function cancelStudentAppointmentAction(appointmentId: string): Pro
     throw new Error("Unauthorized");
   }
 
-  const target = await bookingService.getAppointmentById(appointmentId);
+  const target = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   if (!target) {
     throw new Error("Forbidden");
   }
@@ -62,7 +62,7 @@ export async function cancelStudentAppointmentAction(appointmentId: string): Pro
     throw new Error("Appointment cannot be cancelled");
   }
 
-  await bookingService.updateAppointmentStatus(appointmentId, "cancelled");
+  await bookingService.updateAppointmentStatus(appointmentId, "cancelled", "student");
   revalidateTag(appointmentsListTag("student", sessionUser.userId), "max");
   revalidateTag(appointmentTag(appointmentId), "max");
 }
@@ -74,7 +74,7 @@ export async function completeAppointmentAction(appointmentId: string): Promise<
     throw new Error("Unauthorized");
   }
 
-  const targetAppointment = await bookingService.getAppointmentById(appointmentId);
+  const targetAppointment = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   if (!targetAppointment) {
     throw new Error("Forbidden");
   }
@@ -115,7 +115,7 @@ export async function updateStudentPendingAppointmentAction(
     throw new Error("Unauthorized");
   }
 
-  const target = await bookingService.getAppointmentById(appointmentId);
+  const target = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   if (!target) {
     throw new Error("Forbidden");
   }
@@ -162,7 +162,7 @@ export async function rescheduleCounselorAppointmentAction(
     throw new Error("Invalid appointment time");
   }
 
-  const target = await bookingService.getAppointmentById(appointmentId);
+  const target = await bookingService.verifyAppointmentAccess(sessionUser, appointmentId);
   if (!target) {
     throw new Error("Forbidden");
   }

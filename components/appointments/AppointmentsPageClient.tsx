@@ -1,16 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppointmentDTO } from "@/lib/booking/contracts";
 import AppointmentCard from "./AppointmentCard";
+import AppointmentFilters, {
+  DEFAULT_FILTERS,
+  type AppointmentFiltersState,
+} from "./AppointmentFilters";
 import {
   useAppointments,
   useAppointmentsRealtimeSync,
   useCancelCounselorAppointment,
   useCancelStudentAppointment,
+  useRescheduleCounselorAppointment,
   useUpdateCounselorAppointmentStatus,
   type AppointmentTab,
   selectAppointmentsByTab,
+  applyCompletedFilters,
 } from "@/lib/query/hooks/useAppointments";
 
 const EMPTY_APPOINTMENT_TABS: Record<AppointmentTab, AppointmentDTO[]> = {
@@ -18,6 +24,25 @@ const EMPTY_APPOINTMENT_TABS: Record<AppointmentTab, AppointmentDTO[]> = {
   upcoming: [],
   completed: [],
 };
+
+const FILTERS_STORAGE_KEY = "appointments-filters";
+
+function loadFilters(): AppointmentFiltersState {
+  if (typeof window === "undefined") return DEFAULT_FILTERS;
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return DEFAULT_FILTERS;
+    const parsed = JSON.parse(raw) as Partial<AppointmentFiltersState>;
+    return {
+      sortOrder: parsed.sortOrder === "asc" || parsed.sortOrder === "desc" ? parsed.sortOrder : DEFAULT_FILTERS.sortOrder,
+      dateFrom: typeof parsed.dateFrom === "string" ? parsed.dateFrom : DEFAULT_FILTERS.dateFrom,
+      dateTo: typeof parsed.dateTo === "string" ? parsed.dateTo : DEFAULT_FILTERS.dateTo,
+      statuses: Array.isArray(parsed.statuses) ? parsed.statuses : DEFAULT_FILTERS.statuses,
+    };
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
 
 interface AppointmentsPageClientProps {
   role: "student" | "counselor";
@@ -29,6 +54,13 @@ export default function AppointmentsPageClient({
   participantMap,
 }: AppointmentsPageClientProps) {
   const [activeTab, setActiveTab] = useState<AppointmentTab>("upcoming");
+  const [filters, setFilters] = useState<AppointmentFiltersState>(loadFilters);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+    }
+  }, [filters]);
   const todayIso = new Date().toISOString().split("T")[0];
   const selectByTab = useMemo(() => selectAppointmentsByTab(todayIso), [todayIso]);
 
@@ -40,6 +72,7 @@ export default function AppointmentsPageClient({
   const { mutateAsync: cancelStudentAppointment } = useCancelStudentAppointment();
   const { mutateAsync: cancelCounselorAppointment } = useCancelCounselorAppointment();
   const { mutateAsync: updateCounselorStatus } = useUpdateCounselorAppointmentStatus();
+  const { mutateAsync: rescheduleAppointment } = useRescheduleCounselorAppointment();
 
   async function handleCancelAppointment(appointment: AppointmentDTO) {
     try {
@@ -48,8 +81,8 @@ export default function AppointmentsPageClient({
       } else {
         await cancelCounselorAppointment(appointment.appointment_id);
       }
-    } catch (error) {
-      console.error("Failed to cancel appointment", error);
+    } catch {
+      // cancel failed — user can retry
     }
   }
 
@@ -63,13 +96,49 @@ export default function AppointmentsPageClient({
         appointmentId: appointment.appointment_id,
         status: "approved",
       });
-    } catch (error) {
-      console.error("Failed to approve appointment", error);
+    } catch {
+      // approve failed — user can retry
     }
   }
 
-  const filteredAppointments = appointmentsByTab[activeTab];
-  const activeCount = filteredAppointments.length;
+  async function handleCompleteAppointment(appointment: AppointmentDTO) {
+    if (role !== "counselor") {
+      return;
+    }
+
+    try {
+      await updateCounselorStatus({
+        appointmentId: appointment.appointment_id,
+        status: "completed",
+      });
+    } catch {
+      // complete failed — user can retry
+    }
+  }
+
+  async function handleRescheduleAppointment(appointmentId: string, date: string, time: string) {
+    if (role !== "counselor") {
+      return;
+    }
+
+    try {
+      await rescheduleAppointment({
+        appointmentId,
+        appointmentDate: date,
+        appointmentTime: time,
+      });
+    } catch {
+      // reschedule failed — user can retry
+    }
+  }
+
+  const isCompletedTab = activeTab === "completed";
+  const rawAppointments = appointmentsByTab[activeTab];
+  const filteredAppointments = isCompletedTab
+    ? applyCompletedFilters(rawAppointments, filters)
+    : rawAppointments;
+  const activeCount = rawAppointments.length;
+  const filteredCount = filteredAppointments.length;
 
   return (
     <div className="flex flex-col gap-10 py-6">
@@ -94,13 +163,21 @@ export default function AppointmentsPageClient({
       </div>
 
       <div className="flex flex-col gap-8">
-        <div className="flex items-center gap-3">
-          {activeTab === "pending" && (
-            <span className="w-3 h-3 rounded-full bg-[var(--md-sys-color-error)] animate-pulse" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {activeTab === "pending" && (
+              <span className="w-3 h-3 rounded-full bg-[var(--md-sys-color-error)] animate-pulse" />
+            )}
+            <h2 className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
+              {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Appointments
+              {isCompletedTab && filteredCount !== activeCount
+                ? ` (${filteredCount} of ${activeCount})`
+                : ` (${activeCount})`}
+            </h2>
+          </div>
+          {isCompletedTab && (
+            <AppointmentFilters filters={filters} onChange={setFilters} />
           )}
-          <h2 className="text-2xl font-bold text-[var(--md-sys-color-on-surface)]">
-            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Appointments ({activeCount})
-          </h2>
         </div>
 
         <div className="grid gap-6">
@@ -118,14 +195,26 @@ export default function AppointmentsPageClient({
                   participantAvatar={participant.avatar}
                   onCancelAppointment={handleCancelAppointment}
                   onApproveAppointment={handleApproveAppointment}
+                  onCompleteAppointment={handleCompleteAppointment}
+                  onRescheduleAppointment={handleRescheduleAppointment}
                 />
               );
             })
           ) : (
             <div className="p-20 text-center rounded-[32px] border-2 border-dashed border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)]">
               <p className="text-lg font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                No {activeTab} appointments found.
+                {isCompletedTab && activeCount > 0
+                  ? "No appointments match your filters."
+                  : `No ${activeTab} appointments found.`}
               </p>
+              {isCompletedTab && activeCount > 0 && (
+                <button
+                  onClick={() => setFilters(DEFAULT_FILTERS)}
+                  className="mt-2 text-sm font-semibold text-[var(--md-sys-color-primary)] hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           )}
         </div>

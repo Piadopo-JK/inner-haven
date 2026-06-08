@@ -47,9 +47,11 @@ const EMPTY_STUDENT_DASHBOARD: StudentDashboardOverview = {
 export function CounselorDashboardStatsSection({
   todayIso,
   unreadMessages,
+  resolvedCounselorId,
 }: {
   todayIso: string;
   unreadMessages: number;
+  resolvedCounselorId?: string;
 }) {
   useAppointmentsRealtimeSync("counselor");
 
@@ -69,6 +71,7 @@ export function CounselorDashboardStatsSection({
       upcomingApproved={dashboardAppointments.upcomingApprovedCount}
       completed={dashboardAppointments.completedCount}
       messages={unreadMessages}
+      resolvedCounselorId={resolvedCounselorId ?? ""}
     />
   );
 }
@@ -103,6 +106,7 @@ export function CounselorDashboardNextSessionSection({
       participantName={studentForNextSession?.name || "Student"}
       participantAvatar={studentForNextSession?.avatar_url}
       todayIso={todayIso}
+      role="counselor"
     />
   );
 }
@@ -182,6 +186,7 @@ export function StudentDashboardNextSessionSection({
       participantAvatar={counselorForNextSession?.avatar_url}
       todayIso={todayIso}
       showParticipantOnlineStatus
+      role="student"
     />
   );
 }

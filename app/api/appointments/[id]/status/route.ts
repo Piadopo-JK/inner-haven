@@ -26,13 +26,14 @@ export async function PATCH(
     return NextResponse.json({ error: "Status not found" }, { status: 400 });
   }
 
-  const appointment = await bookingService.getAppointmentById(id);
+  // Verify the counselor is assigned to this appointment
+  const appointment = await bookingService.verifyAppointmentAccess(sessionUser, id);
   if (!appointment) {
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
   }
 
   try {
-    const updated = await bookingService.updateAppointmentStatus(id, body.status);
+    const updated = await bookingService.updateAppointmentStatus(id, body.status, "counselor");
     if (!updated) {
       return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
     }
@@ -62,6 +63,16 @@ export async function PATCH(
           code: "GOOGLE_MEET_CREATE_FAILED",
         },
         { status: 502 },
+      );
+    }
+
+    if (message.startsWith("APPOINTMENT_STATUS_UPDATE_FAILED:")) {
+      return NextResponse.json(
+        {
+          error: message.replace("APPOINTMENT_STATUS_UPDATE_FAILED:", ""),
+          code: "APPOINTMENT_STATUS_UPDATE_FAILED",
+        },
+        { status: 500 },
       );
     }
 

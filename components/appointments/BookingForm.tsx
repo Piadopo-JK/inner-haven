@@ -21,7 +21,7 @@ import {
 import { useCounselors } from "@/lib/query/hooks/useCounselors";
 import { availabilityForMonthQueryOptions } from "@/lib/query/queries";
 import { useSaveAppointment } from "@/lib/query/hooks/useAppointments";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import CounselorProfileCard from "@/components/appointments/CounselorProfileCard";
 import AvailableSlotsGrid from "@/components/appointments/AvailableSlotsGrid";
 import SessionFormatSelection from "@/components/appointments/SessionFormatSelection";
@@ -59,13 +59,22 @@ function parsePrefilledTime(value: string | null): string {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : "";
 }
 
+function formatTime12h(rawTime: string) {
+  const [rawHour = "0", rawMinute = "00"] = rawTime.split(":");
+  const hour24 = Number.parseInt(rawHour, 10);
+  const minute = Number.parseInt(rawMinute, 10);
+  if (Number.isNaN(hour24) || Number.isNaN(minute)) return rawTime;
+  const period = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 export default function BookingForm({ initialAppointment }: BookingFormProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
   const invalidateAvailability = useInvalidateCounselorAvailability();
   const { mutateAsync: saveAppointment, isPending: isSaving } = useSaveAppointment();
-  const redirectTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const prefills = React.useMemo(() => {
     if (initialAppointment) {
@@ -100,6 +109,7 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
   const [isRedirectingAfterConfirm, setIsRedirectingAfterConfirm] = React.useState(false);
+  const [showReceipt, setShowReceipt] = React.useState(false);
   const showConfirmEnvelope = isSaving || isRedirectingAfterConfirm;
 
   React.useEffect(() => {
@@ -113,12 +123,6 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
     setSuccess("");
     setIsRedirectingAfterConfirm(false);
   }, [initialAppointment, prefills]);
-
-  React.useEffect(() => {
-    return () => {
-      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-    };
-  }, []);
 
   const { data: availabilityData } = useAvailabilityForMonth(selectedCounselorId, viewMonth);
 
@@ -151,48 +155,37 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
   }, [selectedCounselorId, selectedDate, availabilityData]);
 
   // Supabase realtime: invalidate availability on appointment / schedule table changes
-  React.useEffect(() => {
-    if (!selectedCounselorId || !selectedDate) return;
+  useRealtimeChannel({
+    channelPrefix: `booking-form-${selectedCounselorId}`,
+    tables: ["appointments"],
+    onEvent: (payload) => {
+      const nextRow = (payload.new ?? {}) as Record<string, unknown>;
+      const previousRow = (payload.old ?? {}) as Record<string, unknown>;
 
-    const selectedDateIso = formatDateOnly(selectedDate);
-    const supabase = createClient();
+      const rowCounselorId = (nextRow.counselor_id ?? previousRow.counselor_id) as string | undefined;
+      if (rowCounselorId !== selectedCounselorId) return;
 
-    const channel = supabase
-      .channel(`booking-form-realtime-${selectedCounselorId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "appointments", filter: `counselor_id=eq.${selectedCounselorId}` },
-        (payload) => {
-          const nextRow = (payload.new ?? {}) as Record<string, unknown>;
-          const previousRow = (payload.old ?? {}) as Record<string, unknown>;
-          const nextStatus = nextRow.status as string | undefined;
-          const previousStatus = previousRow.status as string | undefined;
+      const nextStatus = nextRow.status as string | undefined;
+      const previousStatus = previousRow.status as string | undefined;
 
-          if (nextStatus !== previousStatus || payload.eventType === "INSERT" || payload.eventType === "DELETE") {
-            void invalidateAvailability(selectedCounselorId);
-            if (
-              (nextRow.appointment_date as string | undefined) === selectedDateIso ||
-              (previousRow.appointment_date as string | undefined) === selectedDateIso
-            ) {
-              setSlots([]);
-              setScheduleSummary(undefined);
-            }
+      if (nextStatus !== previousStatus || payload.eventType === "INSERT" || payload.eventType === "DELETE") {
+        void invalidateAvailability(selectedCounselorId);
+        if (selectedDate) {
+          const selectedDateIso = formatDateOnly(selectedDate);
+          if (
+            (nextRow.appointment_date as string | undefined) === selectedDateIso ||
+            (previousRow.appointment_date as string | undefined) === selectedDateIso
+          ) {
+            setSlots([]);
+            setScheduleSummary(undefined);
           }
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "availability", filter: `counselor_id=eq.${selectedCounselorId}` },
-        () => {
-          void invalidateAvailability(selectedCounselorId);
-          setSlots([]);
-          setScheduleSummary(undefined);
-        },
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
-  }, [selectedCounselorId, selectedDate, invalidateAvailability]);
+        }
+      }
+    },
+    onError: () => {
+      void invalidateAvailability(selectedCounselorId);
+    },
+  });
 
   const selectedCounselor = counselors.find((c) => c.counselor_id === selectedCounselorId);
 
@@ -215,8 +208,28 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
       setError("Please confirm booking manually from the button.");
       return;
     }
-    if (!selectedCounselorId || !selectedDate || !selectedTime || !sessionMode) {
-      setError("Please complete all selections.");
+    // Prevent double-submission if the disabled button guard is bypassed
+    if (isSaving || isRedirectingAfterConfirm) return;
+    if (!selectedCounselorId) {
+      setError("Please select a counselor to continue.");
+      return;
+    }
+    if (!selectedDate) {
+      setError("Please pick a date for your session.");
+      return;
+    }
+    if (!selectedTime) {
+      setError("Please select an available time slot.");
+      return;
+    }
+    if (!sessionMode) {
+      setError("Please choose a session format (In-Person or Online).");
+      return;
+    }
+
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 10) {
+      setError("Please state your concern.");
       return;
     }
 
@@ -225,20 +238,18 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
     setIsRedirectingAfterConfirm(true);
 
     try {
-      await saveAppointment({
+      const appointment = await saveAppointment({
         appointmentId: initialAppointment?.appointment_id,
         counselorId: selectedCounselorId,
         appointmentDate: formatDateOnly(selectedDate),
         appointmentTime: selectedTime,
-        reason: reason.trim(),
+        reason: trimmedReason,
         mode: sessionMode,
       });
 
       setSuccess(initialAppointment ? "Your appointment has been updated!" : "Your session has been successfully requested!");
-      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-      redirectTimeoutRef.current = setTimeout(() => {
-        router.push(initialAppointment ? `/appointments/${initialAppointment.appointment_id}` : "/dashboard");
-      }, 2000);
+      setShowReceipt(true);
+      setIsRedirectingAfterConfirm(false);
     } catch (err) {
       setIsRedirectingAfterConfirm(false);
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -260,6 +271,83 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
             message={initialAppointment ? LOADING_MESSAGES.booking.update : LOADING_MESSAGES.booking.submit}
             className="flex min-h-svh items-center justify-center"
           />
+        </div>
+      ) : null}
+
+      {showReceipt && selectedCounselor && selectedDate ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+          style={{ background: "color-mix(in srgb, var(--md-sys-color-scrim) 40%, transparent)", backdropFilter: "blur(2px)" }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+            style={{
+              borderColor: "var(--md-sys-color-outline-variant)",
+              background: "var(--md-sys-color-surface-container-high)",
+            }}
+          >
+            <div
+              className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ background: "var(--md-sys-color-primary-container)" }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--md-sys-color-on-primary-container)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+
+            <p className="text-base font-semibold mb-1 text-center" style={{ color: "var(--md-sys-color-on-surface)" }}>
+              {initialAppointment ? "Appointment updated!" : "Booking submitted successfully!"}
+            </p>
+
+            <div
+              className="mt-4 rounded-xl p-4 text-sm space-y-2"
+              style={{
+                background: "var(--md-sys-color-surface-container)",
+                border: "1px solid var(--md-sys-color-outline-variant)",
+              }}
+            >
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Counselor</span>
+                <span className="font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>{selectedCounselor.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Date</span>
+                <span className="font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Time</span>
+                <span className="font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>{formatTime12h(selectedTime)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Format</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    background: "var(--md-sys-color-secondary-container)",
+                    color: "var(--md-sys-color-on-secondary-container)",
+                  }}
+                >
+                  {sessionMode === "online" ? "Online" : "In-Person"}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => {
+                setShowReceipt(false);
+                if (initialAppointment) {
+                  router.push(`/appointments/${initialAppointment.appointment_id}`);
+                } else {
+                  router.push("/dashboard");
+                }
+              }}
+              className="mt-5 w-full rounded-xl"
+              style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+            >
+              {initialAppointment ? "View Appointment" : "Go to Dashboard"}
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -329,14 +417,15 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                     onSelect={setSelectedDate}
                     month={viewMonth}
                     onMonthChange={setViewMonth}
+                    disabled={{ before: new Date() }}
                     className="w-full"
                   />
                   {scheduleSummary && scheduleSummary.source !== "none" ? (
                     <p className="mt-4 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                      Schedule: {scheduleSummary.start_time}-{scheduleSummary.end_time}{" "}
+                      Schedule: {formatTime12h(scheduleSummary.start_time)}–{formatTime12h(scheduleSummary.end_time)}{" "}
                       ({scheduleSummary.slot_duration_minutes} min slots)
                       {scheduleSummary.breaks.length > 0
-                        ? `, break ${scheduleSummary.breaks[0].start_time}-${scheduleSummary.breaks[0].end_time}`
+                        ? `, break ${formatTime12h(scheduleSummary.breaks[0].start_time)}–${formatTime12h(scheduleSummary.breaks[0].end_time)}`
                         : ""}
                     </p>
                   ) : null}
@@ -349,25 +438,40 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
                   isLoading={isLoadingSlots}
                   emptyState={slotsEmptyState}
                   counselorName={selectedCounselor?.name}
+                  selectedDate={selectedDate ? formatDateOnly(selectedDate) : undefined}
                 />
               </div>
 
               <SessionFormatSelection selectedMode={sessionMode} onSelect={setSessionMode} />
 
               <div className="flex flex-col gap-4">
-                <h3 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">State your concern</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-[var(--md-sys-color-on-surface)]">
+                    State your concern
+                    <span className="ml-1 text-sm font-normal text-[var(--md-sys-color-error)]">*</span>
+                  </h3>
+                  <span className={`text-xs font-medium ${reason.trim().length < 10 && reason.length > 0 ? "text-[var(--md-sys-color-error)]" : "text-[var(--md-sys-color-on-surface-variant)]"}`}>
+                    {reason.length}/250
+                  </span>
+                </div>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder={`Tell ${selectedCounselor?.name.split(" ")[0] || "us"} what's on your mind...`}
+                  minLength={10}
                   maxLength={250}
-                  className="w-full min-h-[150px] p-6 rounded-3xl bg-[var(--md-sys-color-surface-container-low)] border-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] placeholder:opacity-50"
+                  required
+                  className={`w-full min-h-[150px] p-6 rounded-3xl bg-[var(--md-sys-color-surface-container-low)] border-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] placeholder:opacity-50 ${reason.trim().length > 0 && reason.trim().length < 10 ? "ring-2 ring-[var(--md-sys-color-error)]" : ""}`}
                 />
+                {reason.trim().length > 0 && reason.trim().length < 10 && (
+                  <p className="text-xs font-medium text-[var(--md-sys-color-error)] -mt-2">
+                    Minimum 10 characters required ({10 - reason.trim().length} more)
+                  </p>
+                )}
               </div>
             </>
           )}
 
-          {error && <Md3Message tone="error">{error}</Md3Message>}
           {success && <Md3Message tone="success">{success}</Md3Message>}
         </div>
 
@@ -381,6 +485,38 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
           confirmLabel={initialAppointment ? "Save Changes" : "Confirm Session"}
         />
       </div>
+
+      {error && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={() => setError("")} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setError(""); }}>
+            <div
+              className="w-full max-w-sm rounded-2xl border p-6 text-center shadow-xl"
+              style={{
+                borderColor: "var(--md-sys-color-outline-variant)",
+                background: "var(--md-sys-color-surface-container-high)",
+              }}
+            >
+              <div
+                className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+                style={{ background: "var(--md-sys-color-error-container)" }}
+              >
+                <span className="text-xl font-bold" style={{ color: "var(--md-sys-color-error)" }}>!</span>
+              </div>
+              <p className="text-sm font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                {error}
+              </p>
+              <Button
+                onClick={() => setError("")}
+                className="mt-4 rounded-xl"
+                style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+              >
+                OK
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

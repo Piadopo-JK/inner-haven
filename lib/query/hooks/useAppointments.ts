@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import {
   useMutation,
   useQuery,
@@ -9,13 +8,13 @@ import {
 import {
   rescheduleCounselorAppointmentAction,
 } from "@/app/actions/appointments";
-import { createClient } from "@/lib/supabase/client";
 import { createApiError, readResponsePayload } from "@/lib/query/http";
 import {
   appointmentsQueryOptions,
   queryKeys,
 } from "@/lib/query/queries";
 import { debouncedInvalidate } from "@/lib/query/debounce-invalidate";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import type { AppointmentDTO, SessionMode, SessionRole } from "@/lib/booking/contracts";
 export type {
   AppointmentTab,
@@ -29,6 +28,7 @@ export {
   selectCounselorDashboardAppointments,
   selectStudentDashboardAppointments,
   selectStudentDashboardOverview,
+  applyCompletedFilters,
 } from "@/lib/query/appointment-selectors";
 export { useCancelStudentAppointment } from "@/lib/query/hooks/useStudentAppointmentActions";
 
@@ -43,7 +43,7 @@ type SaveAppointmentInput = {
 
 type UpdateCounselorAppointmentStatusInput = {
   appointmentId: string;
-  status: "approved" | "cancelled";
+  status: "approved" | "cancelled" | "completed";
 };
 
 type RescheduleCounselorAppointmentInput = {
@@ -104,6 +104,7 @@ export function useAppointments<TData = AppointmentDTO[]>(
     queryKey: baseOptions.queryKey,
     queryFn: baseOptions.queryFn,
     staleTime: baseOptions.staleTime,
+    placeholderData: (previousData) => previousData,
     // SSR data seeds the cache on first render; background refetch happens
     // because staleTime means it's already stale at the point of hydration.
     ...(initialData !== undefined ? { initialData } : {}),
@@ -114,25 +115,24 @@ export function useAppointments<TData = AppointmentDTO[]>(
 export function useAppointmentsRealtimeSync(role: SessionRole) {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`appointments-realtime-${role}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "appointments" },
-        () => {
-          debouncedInvalidate(queryClient, {
-            queryKey: queryKeys.appointments(role),
-          });
-        },
-      )
-      .subscribe();
+  useRealtimeChannel({
+    channelPrefix: `appointments-sync-${role}`,
+    tables: ["appointments"],
+    onEvent: (payload) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.appointments(role),
+      });
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [role, queryClient]);
+      const row = (payload.new ?? payload.old ?? {}) as Record<string, unknown>;
+      const counselorId = row.counselor_id as string | undefined;
+      if (counselorId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.availabilityByCounselor(counselorId),
+          exact: false,
+        });
+      }
+    },
+  });
 }
 
 export function useCancelCounselorAppointment() {
@@ -325,6 +325,10 @@ export function useSaveAppointment() {
     onSettled: (_appointment, _error, input) => {
       debouncedInvalidate(queryClient, {
         queryKey: queryKeys.appointments("student"),
+      });
+
+      debouncedInvalidate(queryClient, {
+        queryKey: queryKeys.availabilityByCounselor(input.counselorId),
       });
 
       if (input.appointmentId) {

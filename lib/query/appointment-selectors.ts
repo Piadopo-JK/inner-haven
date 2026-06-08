@@ -1,4 +1,8 @@
 import type { AppointmentDTO } from "@/lib/booking/contracts";
+import { isConfirmed } from "@/lib/booking/contracts";
+import type {
+  AppointmentFiltersState,
+} from "@/components/appointments/AppointmentFilters";
 
 export type AppointmentTab = "pending" | "upcoming" | "completed";
 
@@ -44,7 +48,7 @@ export function selectAppointmentsByTab(todayIso: string) {
         if (appointment.status === "pending") {
           acc.pending.push(appointment);
         } else if (
-          appointment.status === "approved" &&
+          isConfirmed(appointment.status) &&
           appointment.appointment_date >= todayIso
         ) {
           acc.upcoming.push(appointment);
@@ -66,7 +70,7 @@ export function selectStudentDashboardAppointments(todayIso: string) {
     approvedUpcoming: sortAppointments(
       appointments.filter(
         (appointment) =>
-          appointment.status === "approved" &&
+          isConfirmed(appointment.status) &&
           appointment.appointment_date >= todayIso,
       ),
     ),
@@ -85,7 +89,7 @@ export function selectStudentDashboardOverview(todayIso: string) {
     const approvedUpcoming = sortAppointments(
       appointments.filter(
         (appointment) =>
-          appointment.status === "approved" &&
+          isConfirmed(appointment.status) &&
           appointment.appointment_date >= todayIso,
       ),
     );
@@ -115,7 +119,7 @@ export function selectCounselorDashboardAppointments(todayIso: string) {
     const approvedUpcoming = sortAppointments(
       appointments.filter(
         (appointment) =>
-          appointment.status === "approved" &&
+          isConfirmed(appointment.status) &&
           appointment.appointment_date >= todayIso,
       ),
     );
@@ -135,7 +139,7 @@ export function selectCounselorDashboardAppointments(todayIso: string) {
       ).length,
       todayScheduled: appointments.filter(
         (appointment) =>
-          appointment.status === "approved" &&
+          isConfirmed(appointment.status) &&
           appointment.appointment_date === todayIso,
       ).length,
       completedCount: appointments.filter(
@@ -145,4 +149,34 @@ export function selectCounselorDashboardAppointments(todayIso: string) {
       nextSession: approvedUpcoming[0],
     };
   };
+}
+
+export function applyCompletedFilters(
+  appointments: AppointmentDTO[],
+  filters: AppointmentFiltersState,
+): AppointmentDTO[] {
+  let filtered = appointments.filter((a) =>
+    filters.statuses.includes(a.status),
+  );
+
+  if (filters.dateFrom) {
+    filtered = filtered.filter(
+      (a) => a.appointment_date >= filters.dateFrom,
+    );
+  }
+
+  if (filters.dateTo) {
+    filtered = filtered.filter(
+      (a) => a.appointment_date <= filters.dateTo,
+    );
+  }
+
+  const sorted = [...filtered].sort((left, right) => {
+    const cmp = (left.updated_at ?? left.created_at).localeCompare(
+      right.updated_at ?? right.created_at,
+    );
+    return filters.sortOrder === "desc" ? -cmp : cmp;
+  });
+
+  return sorted;
 }

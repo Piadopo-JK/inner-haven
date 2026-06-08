@@ -2,7 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import type {
   AnonymousThreadMessage,
   AnonymousThreadSummary,
-  VerifiedAnonymousIdentity,
+  StudentAnonymousThreads,
+  CounselorAnonymousThreadSummary,
 } from "@/lib/anonymous/types";
 import { fetchJson, readJsonResponse } from "@/lib/query/http";
 
@@ -10,6 +11,7 @@ export type ProfileSettingsCachePayload = {
   role: "student" | "counselor";
   name: string;
   avatar_url: string | null;
+  hero_card_url?: string | null;
   about?: string | null;
   specialization?: string | null;
   office_room?: string | null;
@@ -21,22 +23,26 @@ import type {
   CounselorScheduleRuleDTO,
   SessionNoteDTO,
   SessionRole,
+  StudentDirectoryItemDTO,
 } from "@/lib/booking/contracts";
 
 export type GoogleIntegrationStatusPayload = {
   isConnected: boolean;
 };
 
-export const APPOINTMENTS_STALE_MS = 60_000;
+export const APPOINTMENTS_STALE_MS = Infinity; // Realtime is the source of truth
 export const APPOINTMENT_DETAILS_STALE_MS = 60_000;
 export const PROFILE_STALE_MS = 15 * 60_000;
-export const SCHEDULE_STALE_MS = 15 * 60_000;
+export const SCHEDULE_STALE_MS = 0; // Always refetch on mount to stay in sync with DB
 export const NOTES_STALE_MS = 60_000;
-export const AVAILABILITY_STALE_MS = 15 * 60_000;
+export const AVAILABILITY_STALE_MS = 60_000;
 export const COUNSELORS_STALE_MS = 15 * 60_000;
+export const STUDENTS_STALE_MS = 15 * 60_000;
+export const UNREAD_COUNT_STALE_MS = 30_000;
 export const GOOGLE_INTEGRATION_STALE_MS = 60_000;
+export const AUTH_ME_STALE_MS = 30 * 60_000; // 30min — role/userId rarely changes
 export const ANONYMOUS_THREADS_STALE_MS = 30_000;
-export const ANONYMOUS_MESSAGES_STALE_MS = 20_000;
+export const ANONYMOUS_MESSAGES_STALE_MS = 10_000;
 
 export const queryKeys = {
   profile: () => ["profile"] as const,
@@ -45,6 +51,10 @@ export const queryKeys = {
   appointmentDetails: (appointmentId: string) =>
     ["appointment", appointmentId] as const,
   counselors: () => ["counselors"] as const,
+  students: () => ["students"] as const,
+  unreadCount: (role: SessionRole) => ["unread-count", role] as const,
+  anonymousUnreadCount: (role: SessionRole) =>
+    ["anonymous-unread-count", role] as const,
   availabilityRoot: () => ["availability"] as const,
   availabilityByCounselor: (counselorId: string) =>
     ["availability", counselorId] as const,
@@ -58,6 +68,7 @@ export const queryKeys = {
     ["anonymous", "counselor-threads"] as const,
   anonymousThreadMessages: (threadId: string) =>
     ["anonymous", "thread", threadId, "messages"] as const,
+  authMe: () => ["auth", "me"] as const,
 };
 
 export function fetchProfile() {
@@ -101,6 +112,65 @@ export function counselorsQueryOptions() {
     queryKey: queryKeys.counselors(),
     queryFn: fetchCounselors,
     staleTime: COUNSELORS_STALE_MS,
+  });
+}
+
+export function fetchStudents() {
+  return fetchJson<StudentDirectoryItemDTO[]>("/api/counselor/students");
+}
+
+export function studentsQueryOptions() {
+  return queryOptions({
+    queryKey: queryKeys.students(),
+    queryFn: fetchStudents,
+    staleTime: STUDENTS_STALE_MS,
+  });
+}
+
+export function fetchUnreadCount() {
+  return fetchJson<{ count: number }>("/api/notifications/unread-count");
+}
+
+export function unreadCountQueryOptions(role: SessionRole) {
+  return queryOptions({
+    queryKey: queryKeys.unreadCount(role),
+    queryFn: fetchUnreadCount,
+    staleTime: UNREAD_COUNT_STALE_MS,
+  });
+}
+
+export function fetchAnonymousUnreadCount() {
+  return fetchJson<{ count: number }>(
+    "/api/notifications/unread-count?filter=anonymous",
+  );
+}
+
+export function anonymousUnreadCountQueryOptions(role: SessionRole) {
+  return queryOptions({
+    queryKey: queryKeys.anonymousUnreadCount(role),
+    queryFn: fetchAnonymousUnreadCount,
+    staleTime: UNREAD_COUNT_STALE_MS,
+  });
+}
+
+export type AuthMePayload = {
+  role: SessionRole;
+  userId: string;
+  email: string | undefined;
+  name: string;
+  studentId: string | null;
+  counselorId: string | null;
+};
+
+export function fetchAuthMe() {
+  return fetchJson<AuthMePayload | null>("/api/auth/me");
+}
+
+export function authMeQueryOptions() {
+  return queryOptions({
+    queryKey: queryKeys.authMe(),
+    queryFn: fetchAuthMe,
+    staleTime: AUTH_ME_STALE_MS,
   });
 }
 
@@ -194,9 +264,9 @@ export async function fetchAnonymousIdentity() {
     return null;
   }
 
-  return readJsonResponse<VerifiedAnonymousIdentity>(
+  return readJsonResponse<StudentAnonymousThreads>(
     response,
-    "Unable to verify anonymous identity.",
+    "Unable to load anonymous threads.",
   );
 }
 
@@ -210,7 +280,7 @@ export function anonymousIdentityQueryOptions() {
 
 export async function fetchAnonymousCounselorThreads() {
   const payload = await fetchJson<{
-    threads?: AnonymousThreadSummary[];
+    threads?: CounselorAnonymousThreadSummary[];
   }>("/api/counselor/anonymous-threads");
 
   return payload.threads ?? [];

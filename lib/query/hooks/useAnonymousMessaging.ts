@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { createClient } from "@/lib/supabase/client";
 import { readJsonResponse } from "@/lib/query/http";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
 import type {
   AnonymousSender,
   AnonymousThreadMessage,
   AnonymousThreadSummary,
-  VerifiedAnonymousIdentity,
+  StudentAnonymousThreads,
+  CounselorAnonymousThreadSummary,
 } from "@/lib/anonymous/types";
 import {
   anonymousCounselorThreadsQueryOptions,
@@ -17,11 +17,6 @@ import {
   anonymousThreadMessagesQueryOptions,
   queryKeys,
 } from "@/lib/query/queries";
-
-type CreateAnonymousIdentityResponse = {
-  identityId: string;
-  expiresAt: string;
-};
 
 type CreateAnonymousThreadInput = {
   counselorId: string;
@@ -72,6 +67,24 @@ function patchThreadPreview(
   );
 }
 
+function isLastSeenAtOnlyUpdate(
+  payload: { eventType: string; old: Record<string, unknown>; new: Record<string, unknown> },
+): boolean {
+  if (payload.eventType !== "UPDATE") return false;
+  const oldRow = payload.old ?? {};
+  const newRow = payload.new ?? {};
+
+  if (oldRow.last_seen_at === newRow.last_seen_at) return false;
+
+  const allKeys = new Set([...Object.keys(oldRow), ...Object.keys(newRow)]);
+  allKeys.delete("last_seen_at");
+  allKeys.delete("updated_at");
+  for (const key of allKeys) {
+    if (oldRow[key] !== newRow[key]) return false;
+  }
+  return true;
+}
+
 export function useAnonymousIdentity() {
   return useQuery({
     ...anonymousIdentityQueryOptions(),
@@ -79,100 +92,28 @@ export function useAnonymousIdentity() {
   });
 }
 
-export function useAnonymousIdentityRealtimeSync(identityId?: string) {
+export function useAnonymousIdentityRealtimeSync(ownerAuthUserId?: string) {
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!identityId) {
-      return;
-    }
+  useRealtimeChannel({
+    channelPrefix: `anonymous-student-${ownerAuthUserId ?? "anon"}`,
+    tables: ["anonymous_threads"],
+    filters: ownerAuthUserId ? { anonymous_threads: `owner_auth_user_id=eq.${ownerAuthUserId}` } : undefined,
+    onEvent: (payload) => {
+      if (isLastSeenAtOnlyUpdate(payload)) return;
 
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`anonymous-identity-${identityId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "anonymous_threads",
-          filter: `anonymous_identity_id=eq.${identityId}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.anonymousIdentity(),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [identityId, queryClient]);
-}
-
-export function useCreateAnonymousIdentity() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/anonymous-requests/identity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousIdentity(),
       });
 
-      return parseMutationPayload<CreateAnonymousIdentityResponse>(
-        response,
-        "Unable to create anonymous identity.",
-      );
-    },
-
-    onSuccess: ({ identityId, expiresAt }) => {
-      queryClient.setQueryData<VerifiedAnonymousIdentity>(
-        queryKeys.anonymousIdentity(),
-        {
-          identityId,
-          expiresAt,
-          threads: [],
-        },
-      );
+      const threadId = (payload.new as Record<string, unknown>)?.id as string | undefined;
+      if (threadId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.anonymousThreadMessages(threadId),
+        });
+      }
     },
   });
-}
-
-export function useAnonymousCounselorThreads() {
-  return useQuery({
-    ...anonymousCounselorThreadsQueryOptions(),
-  });
-}
-
-export function useCounselorAnonymousThreadsRealtimeSync() {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("anonymous-counselor-threads")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "anonymous_threads",
-        },
-        () => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.anonymousCounselorThreads(),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [queryClient]);
 }
 
 export function useCreateAnonymousThread() {
@@ -200,6 +141,91 @@ export function useCreateAnonymousThread() {
   });
 }
 
+export function useDetachThread() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (threadId: string) => {
+      const response = await fetch(`/api/anonymous-threads/${threadId}/detach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.status === 401) {
+        throw new Error("Session may have expired. Please refresh and try again.");
+      }
+
+      return parseMutationPayload<{ ok: true }>(
+        response,
+        "Unable to detach thread.",
+      );
+    },
+
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousIdentity(),
+      });
+    },
+  });
+}
+
+export function useDetachThreadByCounselor() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (threadId: string) => {
+      const response = await fetch(`/api/anonymous-threads/${threadId}/counselor-detach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.status === 401) {
+        throw new Error("Session may have expired. Please refresh and try again.");
+      }
+
+      return parseMutationPayload<{ ok: true }>(
+        response,
+        "Unable to detach thread.",
+      );
+    },
+
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousCounselorThreads(),
+      });
+    },
+  });
+}
+
+export function useAnonymousCounselorThreads() {
+  return useQuery({
+    ...anonymousCounselorThreadsQueryOptions(),
+  });
+}
+
+export function useCounselorAnonymousThreadsRealtimeSync() {
+  const queryClient = useQueryClient();
+
+  useRealtimeChannel({
+    channelPrefix: "anonymous-counselor-threads",
+    tables: ["anonymous_threads"],
+    onEvent: (payload) => {
+      if (isLastSeenAtOnlyUpdate(payload)) return;
+
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.anonymousCounselorThreads(),
+      });
+
+      const threadId = (payload.new as Record<string, unknown>)?.id as string | undefined;
+      if (threadId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.anonymousThreadMessages(threadId),
+        });
+      }
+    },
+  });
+}
+
 export function useAnonymousThreadMessages(threadId: string) {
   return useQuery({
     ...anonymousThreadMessagesQueryOptions(threadId),
@@ -207,46 +233,10 @@ export function useAnonymousThreadMessages(threadId: string) {
 }
 
 export function useAnonymousThreadRealtimeSync(
-  threadId: string,
-  viewer: AnonymousSender,
+  _threadId: string,
+  _viewer: AnonymousSender,
 ) {
-  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!threadId) {
-      return;
-    }
-
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`anonymous-thread-${threadId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "anonymous_messages",
-          filter: `thread_id=eq.${threadId}`,
-        },
-        () => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.anonymousThreadMessages(threadId),
-          });
-
-          void queryClient.invalidateQueries({
-            queryKey:
-              viewer === "student"
-                ? queryKeys.anonymousIdentity()
-                : queryKeys.anonymousCounselorThreads(),
-          });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [queryClient, threadId, viewer]);
 }
 
 export function useSendAnonymousMessage(threadId: string) {
@@ -289,10 +279,10 @@ export function useSendAnonymousMessage(threadId: string) {
         queryKeys.anonymousThreadMessages(threadId),
       );
       const previousIdentity = queryClient.getQueryData<
-        VerifiedAnonymousIdentity | null
+        StudentAnonymousThreads | null
       >(queryKeys.anonymousIdentity());
       const previousCounselorThreads = queryClient.getQueryData<
-        AnonymousThreadSummary[]
+        CounselorAnonymousThreadSummary[]
       >(queryKeys.anonymousCounselorThreads());
 
       queryClient.setQueryData<AnonymousThreadMessage[]>(
@@ -301,7 +291,7 @@ export function useSendAnonymousMessage(threadId: string) {
       );
 
       if (sender === "student") {
-        queryClient.setQueryData<VerifiedAnonymousIdentity | null>(
+        queryClient.setQueryData<StudentAnonymousThreads | null>(
           queryKeys.anonymousIdentity(),
           (current) =>
             current
@@ -317,16 +307,16 @@ export function useSendAnonymousMessage(threadId: string) {
               : current,
         );
       } else {
-        queryClient.setQueryData<AnonymousThreadSummary[] | undefined>(
+        queryClient.setQueryData<CounselorAnonymousThreadSummary[] | undefined>(
           queryKeys.anonymousCounselorThreads(),
           (current) =>
             current
               ? patchThreadPreview(
-                  current,
+                  current as unknown as AnonymousThreadSummary[],
                   threadId,
                   trimmedMessage,
                   createdAt,
-                )
+                ) as unknown as CounselorAnonymousThreadSummary[]
               : current,
         );
       }

@@ -110,6 +110,7 @@ type CounselorRow = {
   office_room: string | null;
   about: string | null;
   avatar_url: string | null;
+  hero_card_url: string | null;
 };
 
 type StudentRow = {
@@ -174,6 +175,7 @@ function mapCounselorRowToDTO(row: CounselorRow): CounselorDirectoryItemDTO {
     office_room: row.office_room ?? "",
     about: row.about ?? "",
     avatar_url: row.avatar_url ?? undefined,
+    hero_card_url: row.hero_card_url ?? undefined,
   };
 }
 
@@ -293,7 +295,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .maybeSingle();
 
     if (!byAuth?.student_id) {
-      console.warn(`[booking] Could not resolve student ID for: ${id}`);
       return null;
     }
 
@@ -355,7 +356,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .maybeSingle();
 
     if (!byAuth?.counselor_id) {
-      console.warn(`[booking] Could not resolve counselor ID for: ${id}`);
       return null;
     }
 
@@ -368,23 +368,38 @@ export class SupabaseBookingRepository implements BookingRepository {
     const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("counselors")
-      .select("counselor_id, name, email, specialization, office_room, about, avatar_url")
+      .select("counselor_id, name, email, specialization, office_room, about, avatar_url, hero_card_url")
       .order("name", { ascending: true });
 
     if (error) {
-      if (!isMissingColumnError(error, "counselors", "avatar_url")) {
+      const missingAvatar = isMissingColumnError(error, "counselors", "avatar_url");
+      const missingHero = isMissingColumnError(error, "counselors", "hero_card_url");
+      if (!missingAvatar && !missingHero) {
         throw error;
       }
 
+      const safeSelect = "counselor_id, name, email, specialization, office_room, about"
+        + (missingAvatar ? "" : ", avatar_url")
+        + (missingHero ? "" : ", hero_card_url");
+
       const { data: fallbackData, error: fallbackError } = await supabase
         .from("counselors")
-        .select("counselor_id, name, email, specialization, office_room, about")
+        .select(safeSelect)
         .order("name", { ascending: true });
 
       if (fallbackError) throw fallbackError;
 
-      return ((fallbackData ?? []) as Array<Omit<CounselorRow, "avatar_url">>).map((row) =>
-        mapCounselorRowToDTO({ ...row, avatar_url: null }),
+      return ((fallbackData ?? []) as Array<Partial<CounselorRow>>).map((row) =>
+        mapCounselorRowToDTO({
+          counselor_id: row.counselor_id!,
+          name: row.name!,
+          email: row.email!,
+          specialization: row.specialization ?? null,
+          office_room: row.office_room ?? null,
+          about: row.about ?? null,
+          avatar_url: row.avatar_url ?? null,
+          hero_card_url: row.hero_card_url ?? null,
+        }),
       );
     }
 
@@ -481,7 +496,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       .select("appointment_time")
       .eq("counselor_id", counselorId)
       .eq("appointment_date", date)
-      .in("status", ["approved", "pending"]);
+      .in("status", ["approved", "pending", "rescheduled"]);
 
     if (apptError) throw apptError;
 
@@ -591,7 +606,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       .eq("counselor_id", counselorId)
       .gte("appointment_date", fromDate)
       .lte("appointment_date", toDate)
-      .in("status", ["approved", "pending"]);
+      .in("status", ["approved", "pending", "rescheduled"]);
 
     if (apptError) throw apptError;
 
@@ -782,17 +797,20 @@ export class SupabaseBookingRepository implements BookingRepository {
 
     if (!studentId) throw new Error(`Could not resolve student: ${input.student_id}`);
     if (!counselorId) throw new Error(`Could not resolve counselor: ${input.counselor_id}`);
+
+    const normalizedTime = normalizeTime(input.appointment_time);
+
     const { data: conflictingAppointments, error: conflictError } = await supabase
       .from("appointments")
       .select("appointment_id, appointment_time")
       .eq("counselor_id", counselorId)
       .eq("appointment_date", input.appointment_date)
-      .eq("status", "approved");
+      .in("status", ["approved", "pending", "rescheduled"]);
 
     if (conflictError) throw conflictError;
 
     const hasConflict = (conflictingAppointments ?? []).some(
-      (row) => normalizeTime(row.appointment_time as string) === input.appointment_time,
+      (row) => normalizeTime(row.appointment_time as string) === normalizedTime,
     );
 
     if (hasConflict) {
@@ -805,7 +823,7 @@ export class SupabaseBookingRepository implements BookingRepository {
         student_id: studentId,
         counselor_id: counselorId,
         appointment_date: input.appointment_date,
-        appointment_time: input.appointment_time,
+        appointment_time: normalizedTime,
         reason: input.reason,
         mode: input.mode,
         status: "pending",
@@ -813,7 +831,12 @@ export class SupabaseBookingRepository implements BookingRepository {
       .select("*")
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error("That timeslot is already taken");
+      }
+      throw error;
+    }
 
     const appointment = mapAppointmentRowToDTO(data as AppointmentRow);
     const now = new Date().toISOString();
@@ -824,7 +847,7 @@ export class SupabaseBookingRepository implements BookingRepository {
         recipient_role: "counselor",
         type: "booking_request",
         appointment_id: appointment.appointment_id,
-        message: `New booking request for ${input.appointment_date} at ${input.appointment_time}`,
+        message: `New booking request for ${input.appointment_date} at ${normalizedTime}`,
         sent_at: now,
         read: false,
       },
@@ -833,14 +856,14 @@ export class SupabaseBookingRepository implements BookingRepository {
         recipient_role: "student",
         type: "booking_pending",
         appointment_id: appointment.appointment_id,
-        message: `Your booking for ${input.appointment_date} at ${input.appointment_time} has been submitted`,
+        message: `Your booking for ${input.appointment_date} at ${normalizedTime} has been submitted`,
         sent_at: now,
         read: false,
       },
     ]);
 
     if (notificationsError) {
-      console.error("Failed to create booking notifications", notificationsError);
+      // booking notifications failed — appointment was still created
     }
 
     return appointment;
@@ -867,7 +890,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       .select("appointment_id, appointment_time")
       .eq("counselor_id", counselorId)
       .eq("appointment_date", input.appointment_date)
-      .eq("status", "approved");
+      .in("status", ["approved", "pending", "rescheduled"]);
 
     if (conflictError) throw conflictError;
 
@@ -895,7 +918,12 @@ export class SupabaseBookingRepository implements BookingRepository {
       .select("*")
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error("That timeslot is already taken");
+      }
+      throw error;
+    }
     if (!data) return null;
 
     const now = new Date().toISOString();
@@ -910,7 +938,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     });
 
     if (notificationsError) {
-      console.error("Failed to create reschedule notification", notificationsError);
+      // reschedule notification failed — appointment was still updated
     }
 
     return mapAppointmentRowToDTO(data as AppointmentRow);
@@ -968,7 +996,7 @@ export class SupabaseBookingRepository implements BookingRepository {
 
       if (row.status === "pending") {
         pendingToExpireIds.push(row.appointment_id);
-      } else if (row.status === "approved") {
+      } else if (row.status === "approved" || row.status === "rescheduled") {
         approvedToCompleteIds.push(row.appointment_id);
       }
     }
@@ -988,8 +1016,8 @@ export class SupabaseBookingRepository implements BookingRepository {
             .update({ status: "completed", updated_at: new Date().toISOString() })
             .in("appointment_id", approvedToCompleteIds);
         }
-      } catch (transitionError) {
-        console.error("Failed to persist automatic appointment status transitions", transitionError);
+      } catch {
+        // automatic status transitions (expire/complete) failed — will retry next list
       }
     }
 
@@ -999,7 +1027,7 @@ export class SupabaseBookingRepository implements BookingRepository {
         if (row.status === "pending") {
           return { ...row, status: "expired" } as AppointmentRow;
         }
-        if (row.status === "approved") {
+        if (row.status === "approved" || row.status === "rescheduled") {
           return { ...row, status: "completed" } as AppointmentRow;
         }
       }
@@ -1041,7 +1069,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       .select("appointment_id, appointment_time")
       .eq("counselor_id", current.counselor_id)
       .eq("appointment_date", appointmentDate)
-      .eq("status", "approved");
+      .in("status", ["approved", "pending", "rescheduled"]);
 
     if (conflictError) throw conflictError;
 
@@ -1059,14 +1087,35 @@ export class SupabaseBookingRepository implements BookingRepository {
       .update({
         appointment_date: appointmentDate,
         appointment_time: normalizedTime,
+        status: "rescheduled",
         updated_at: new Date().toISOString(),
       })
       .eq("appointment_id", appointmentId)
       .select("*")
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error("That timeslot is already taken");
+      }
+      throw error;
+    }
     if (!data) return null;
+
+    const now = new Date().toISOString();
+    const { error: notificationsError } = await supabase.from("notifications").insert({
+      recipient_id: current.student_id,
+      recipient_role: "student",
+      type: "booking_rescheduled",
+      appointment_id: appointmentId,
+      message: `Your appointment has been rescheduled to ${appointmentDate} at ${normalizedTime}`,
+      sent_at: now,
+      read: false,
+    });
+
+    if (notificationsError) {
+      // reschedule notification failed — appointment was still updated
+    }
 
     return mapAppointmentRowToDTO(data as AppointmentRow);
   }
@@ -1096,7 +1145,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .maybeSingle();
 
     if (error) {
-      console.error("Failed to fetch counselor Google token", error);
       return null;
     }
 
@@ -1106,7 +1154,6 @@ export class SupabaseBookingRepository implements BookingRepository {
     try {
       return decrypt(stored);
     } catch {
-      console.error("Failed to decrypt counselor Google token");
       return null;
     }
   }
@@ -1115,6 +1162,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     appointmentId: string,
     status: AppointmentStatus,
     meetingLink?: string,
+    performedBy?: "student" | "counselor",
   ): Promise<AppointmentDTO | null> {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -1131,8 +1179,13 @@ export class SupabaseBookingRepository implements BookingRepository {
     const now = new Date().toISOString();
 
     if (status === "approved" || status === "cancelled") {
-      const type = status === "approved" ? "booking_approved" : "booking_declined";
-      const verb = status === "approved" ? "approved" : "declined";
+      const isStudentCancel = status === "cancelled" && performedBy === "student";
+      const type = status === "approved"
+        ? "booking_approved"
+        : isStudentCancel ? "booking_cancelled" : "booking_declined";
+      const verb = status === "approved"
+        ? "approved"
+        : isStudentCancel ? "cancelled" : "declined";
 
       let message = `Your booking for ${appointment.appointment_date} at ${appointment.appointment_time} has been ${verb}`;
       if (status === "approved" && meetingLink) {
@@ -1150,7 +1203,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       });
 
       if (notificationsError) {
-        console.error("Failed to create status update notification", notificationsError);
+        // status notification failed — status was still updated
       }
     }
 
@@ -1233,7 +1286,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .update({ read: true })
       .eq("recipient_role", role)
       .eq("recipient_id", resolvedUserId)
-      .eq("read", false)
       .select("notification_id");
 
     if (error) throw error;
@@ -1248,8 +1300,18 @@ export class SupabaseBookingRepository implements BookingRepository {
     return notifications.filter((notification) => !notification.read).length;
   }
 
+  async countUnreadAnonymousMessages(
+    role: SessionRole,
+    userId?: string,
+  ): Promise<number> {
+    const notifications = await this.listNotifications(role, userId);
+    return notifications.filter(
+      (n) => !n.read && n.type === "session_notes" && n.anonymous_thread_id,
+    ).length;
+  }
+
   async getSessionNote(appointmentId: string): Promise<SessionNoteDTO | null> {
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     const { data, error } = await supabase
       .from("session_notes")
       .select("note_id, appointment_id, note_content, recommendations, follow_up, created_at, updated_at, counselor_id")
@@ -1398,7 +1460,7 @@ export class SupabaseBookingRepository implements BookingRepository {
         });
 
         if (notificationsError) {
-          console.error("Failed to create session note notification", notificationsError);
+          // session note notification failed — note was still saved
         }
       }
     }

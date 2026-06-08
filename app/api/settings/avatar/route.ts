@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import {
   assertValidAvatarFile,
   buildAvatarPath,
+  buildHeroCardPath,
   deleteAvatarObject,
   extractAvatarPathFromUrl,
   uploadAvatarObject,
@@ -12,6 +13,7 @@ import {
 
 type ProfileRow = {
   avatar_url: string | null;
+  hero_card_url: string | null;
 };
 
 async function getProfileTableAndRow(authUserId: string, role: "student" | "counselor") {
@@ -20,7 +22,7 @@ async function getProfileTableAndRow(authUserId: string, role: "student" | "coun
 
   const { data, error } = await supabase
     .from(table)
-    .select("avatar_url")
+    .select("avatar_url, hero_card_url")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
 
@@ -49,6 +51,19 @@ async function setAvatarUrl(authUserId: string, role: "student" | "counselor", a
   }
 }
 
+async function setHeroCardUrl(authUserId: string, heroCardUrl: string | null) {
+  const supabase = createServiceClient();
+
+  const { error } = await supabase
+    .from("counselors")
+    .update({ hero_card_url: heroCardUrl })
+    .eq("auth_user_id", authUserId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function GET() {
   try {
     const sessionUser = await getSessionUser();
@@ -57,7 +72,10 @@ export async function GET() {
     }
 
     const { row } = await getProfileTableAndRow(sessionUser.userId, sessionUser.role);
-    return NextResponse.json({ avatar_url: row.avatar_url });
+    return NextResponse.json({
+      avatar_url: row.avatar_url,
+      hero_card_url: row.hero_card_url,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to get avatar";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -72,27 +90,50 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get("avatar");
+    const avatarFile = formData.get("avatar");
+    const heroCardFile = formData.get("hero_card");
 
-    if (!(file instanceof File)) {
+    if (!(avatarFile instanceof File)) {
       return NextResponse.json({ error: "Missing avatar file" }, { status: 400 });
     }
 
-    assertValidAvatarFile(file);
+    assertValidAvatarFile(avatarFile);
 
-    const { row } = await getProfileTableAndRow(sessionUser.userId, sessionUser.role);
-    const oldPath = extractAvatarPathFromUrl(row.avatar_url);
-
-    const path = buildAvatarPath(sessionUser.role, sessionUser.userId, file);
-    const uploaded = await uploadAvatarObject(path, file);
-
-    await setAvatarUrl(sessionUser.userId, sessionUser.role, uploaded.publicUrl);
-
-    if (oldPath && oldPath !== path) {
-      await deleteAvatarObject(oldPath).catch(() => undefined);
+    if (heroCardFile instanceof File) {
+      assertValidAvatarFile(heroCardFile);
     }
 
-    return NextResponse.json({ ok: true, avatar_url: uploaded.publicUrl, path: uploaded.path });
+    const { row } = await getProfileTableAndRow(sessionUser.userId, sessionUser.role);
+
+    // Upload avatar
+    const oldAvatarPath = extractAvatarPathFromUrl(row.avatar_url);
+    const avatarPath = buildAvatarPath(sessionUser.role, sessionUser.userId, avatarFile);
+    const uploadedAvatar = await uploadAvatarObject(avatarPath, avatarFile);
+    await setAvatarUrl(sessionUser.userId, sessionUser.role, uploadedAvatar.publicUrl);
+
+    if (oldAvatarPath && oldAvatarPath !== avatarPath) {
+      await deleteAvatarObject(oldAvatarPath).catch(() => undefined);
+    }
+
+    // Upload hero card (counselor only)
+    let uploadedHeroCardUrl: string | null = null;
+    if (heroCardFile instanceof File && sessionUser.role === "counselor") {
+      const oldHeroPath = extractAvatarPathFromUrl(row.hero_card_url);
+      const heroPath = buildHeroCardPath(sessionUser.role, sessionUser.userId, heroCardFile);
+      const uploadedHero = await uploadAvatarObject(heroPath, heroCardFile);
+      uploadedHeroCardUrl = uploadedHero.publicUrl;
+      await setHeroCardUrl(sessionUser.userId, uploadedHeroCardUrl);
+
+      if (oldHeroPath && oldHeroPath !== heroPath) {
+        await deleteAvatarObject(oldHeroPath).catch(() => undefined);
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      avatar_url: uploadedAvatar.publicUrl,
+      hero_card_url: uploadedHeroCardUrl,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to upload avatar";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -103,13 +144,30 @@ export async function PUT(request: NextRequest) {
   return POST(request);
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
     const sessionUser = await getSessionUser();
     if (!sessionUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const url = new URL(request.url);
+    const targetType = url.searchParams.get("type");
+
+    if (targetType === "hero_card" && sessionUser.role === "counselor") {
+      // Delete hero card only
+      const { row } = await getProfileTableAndRow(sessionUser.userId, sessionUser.role);
+      const path = extractAvatarPathFromUrl(row.hero_card_url);
+
+      if (path) {
+        await deleteAvatarObject(path).catch(() => undefined);
+      }
+
+      await setHeroCardUrl(sessionUser.userId, null);
+      return NextResponse.json({ ok: true });
+    }
+
+    // Default: delete avatar
     const { row } = await getProfileTableAndRow(sessionUser.userId, sessionUser.role);
     const path = extractAvatarPathFromUrl(row.avatar_url);
 

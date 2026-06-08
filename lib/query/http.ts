@@ -51,6 +51,6 @@ export async function readJsonResponse<T>(
 }
 
 export async function fetchJson<T>(url: string, init?: RequestInit) {
-  const response = await fetch(url, { cache: "no-store", ...init });
+  const response = await fetch(url, init);
   return readJsonResponse<T>(response, `Request failed: ${url}`);
 }

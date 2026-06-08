@@ -4,6 +4,7 @@ import NotificationBell from "@/components/nav/NotificationBell";
 import HamburgerMenu from "@/components/nav/HamburgerMenu";
 import ProfileMenu from "@/components/nav/ProfileMenu";
 import CounselorHeartbeat from "@/components/layout/CounselorHeartbeat";
+import { ThemeToggle } from "@/components/theme-switcher";
 
 export default async function Navbar() {
   const sessionUser = await getSessionUser();
@@ -14,6 +15,10 @@ export default async function Navbar() {
     sessionUser.role,
     sessionUser.userId,
   );
+
+  const resolvedUserId = sessionUser.role === "counselor"
+    ? await bookingService.resolveCounselorId(sessionUser.userId)
+    : await bookingService.resolveStudentId(sessionUser.userId);
 
   return (
     <>
@@ -33,9 +38,11 @@ export default async function Navbar() {
         </div>
 
         <div className="flex items-center gap-1 md:gap-2">
+          <ThemeToggle />
           <NotificationBell
             role={sessionUser.role}
             userId={sessionUser.userId}
+            resolvedUserId={resolvedUserId ?? undefined}
             notifications={notifications}
           />
 

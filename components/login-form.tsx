@@ -136,6 +136,16 @@ export function LoginForm({
                 Sign in with Google
               </Button>
             </div>
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              By logging in, you agree to our{" "}
+              <Link href="/terms" className="underline underline-offset-4" target="_blank">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="underline underline-offset-4" target="_blank">
+                Privacy Policy
+              </Link>
+            </p>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{" "}
               <Link

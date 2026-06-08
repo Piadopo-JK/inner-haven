@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { NotificationDTO, SessionRole } from "@/lib/booking/contracts";
+import { SessionRole } from "@/lib/booking/contracts";
 
 const PRESENCE_TOPIC = "presence:counselors";
 
@@ -56,56 +55,7 @@ export default function StudentStatsRow({
   counselors,
   completed,
 }: StudentStatsRowProps) {
-  const queryClient = useQueryClient();
-  const notificationsQueryKey = useMemo(
-    () => ["notifications", role, userId] as const,
-    [role, userId],
-  );
   const [onlineCounselors, setOnlineCounselors] = useState(counselors);
-
-  const { data: notifications = [] } = useQuery({
-    queryKey: notificationsQueryKey,
-    queryFn: async () => {
-      const params = new URLSearchParams({ role, user_id: userId });
-      const response = await fetch(`/api/notifications?${params.toString()}`, {
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to load notifications.");
-      }
-
-      return (await response.json()) as NotificationDTO[];
-    },
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`student-stats-notifications-${role}-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        (payload) => {
-          const row = ((payload.new ?? payload.old) as {
-            recipient_id?: string;
-            recipient_role?: SessionRole;
-          }) ?? {};
-
-          if (row.recipient_id !== userId || row.recipient_role !== role) {
-            return;
-          }
-
-          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [notificationsQueryKey, queryClient, role, userId]);
 
   useEffect(() => {
     setOnlineCounselors(counselors);
@@ -144,9 +94,7 @@ export default function StudentStatsRow({
     };
   }, []);
 
-  const unreadMessages = notifications.length
-    ? notifications.reduce((count, notification) => count + (notification.read ? 0 : 1), 0)
-    : messages;
+  const unreadMessages = messages;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 py-1">

@@ -59,10 +59,10 @@ jest.mock("@/lib/supabase/server", () => ({
 }));
 
 // Mock anonymous dependencies
-const mockVerifyIdentityByOwner = jest.fn();
+const mockListStudentThreads = jest.fn();
 const mockCreateThreadWithFirstMessage = jest.fn();
 jest.mock("@/lib/anonymous/repository", () => ({
-  get verifyIdentityByOwner() { return mockVerifyIdentityByOwner; },
+  get listStudentThreads() { return mockListStudentThreads; },
 }));
 jest.mock("@/lib/anonymous/service", () => ({
   get createThreadWithFirstMessage() { return mockCreateThreadWithFirstMessage; },
@@ -1001,7 +1001,6 @@ describe("Integration Tests", () => {
 
     it("returns 201 with threadId", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockVerifyIdentityByOwner.mockResolvedValue({ identityId: "id-1", threads: [] });
       mockCreateThreadWithFirstMessage.mockResolvedValue({ threadId: "thread-1" });
 
       const res = await POST(
@@ -1017,7 +1016,6 @@ describe("Integration Tests", () => {
 
     it("returns 500 on service error", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockVerifyIdentityByOwner.mockResolvedValue({ identityId: "id-1", threads: [] });
       mockCreateThreadWithFirstMessage.mockRejectedValue(new Error("DB error"));
 
       const res = await POST(
@@ -1029,9 +1027,11 @@ describe("Integration Tests", () => {
       expect(res.status).toBe(500);
     });
 
-    it("returns 401 when no pseudonymous identity exists", async () => {
+    it("returns 409 on duplicate active thread", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockVerifyIdentityByOwner.mockResolvedValue(null);
+      const dupError = new Error("duplicate") as Error & { code: string };
+      dupError.code = "23505";
+      mockCreateThreadWithFirstMessage.mockRejectedValue(dupError);
 
       const res = await POST(
         makeRequest("/api/anonymous-threads", {
@@ -1039,7 +1039,7 @@ describe("Integration Tests", () => {
           body: JSON.stringify({ counselorId: "cou-1", message: "I need help with something" }),
         }),
       );
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(409);
     });
   });
 

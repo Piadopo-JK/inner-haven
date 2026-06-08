@@ -1,4 +1,5 @@
 import {
+  AppointmentDTO,
   AppointmentStatus,
   BookingRequestDTO,
   CounselorScheduleRuleInputDTO,
@@ -7,6 +8,12 @@ import {
 import { BookingRepository } from "@/lib/booking/repository";
 import { SupabaseBookingRepository } from "@/lib/booking/supabase-repository";
 import { createMeetSpace } from "@/lib/google-meet/client";
+
+export type SessionUser = {
+  userId: string;
+  role: SessionRole;
+  email: string | undefined;
+};
 
 export class BookingService {
   constructor(private repo: BookingRepository) {}
@@ -52,7 +59,29 @@ export class BookingService {
     return this.repo.getAppointmentById(appointmentId);
   }
 
-  async updateAppointmentStatus(id: string, status: AppointmentStatus) {
+  async verifyAppointmentAccess(
+    sessionUser: SessionUser,
+    appointmentId: string,
+  ): Promise<AppointmentDTO | null> {
+    const appointment = await this.repo.getAppointmentById(appointmentId);
+    if (!appointment) return null;
+
+    if (sessionUser.role === "student") {
+      const studentId = await this.repo.resolveStudentId(sessionUser.userId);
+      if (!studentId || appointment.student_id !== studentId) return null;
+    } else if (sessionUser.role === "counselor") {
+      const counselorId = await this.repo.resolveCounselorId(sessionUser.userId);
+      if (!counselorId || appointment.counselor_id !== counselorId) return null;
+    }
+
+    return appointment;
+  }
+
+  async updateAppointmentStatus(
+    id: string,
+    status: AppointmentStatus,
+    performedBy?: "student" | "counselor",
+  ) {
     let meetingLink: string | undefined;
 
     if (status === "approved") {
@@ -79,7 +108,14 @@ export class BookingService {
               "GOOGLE_MEET_CREATE_FAILED:Unable to create a Google Meet link right now. Please try again.",
             );
           }
-          await this.repo.saveMeetLink(id, meetingLink);
+          try {
+            await this.repo.saveMeetLink(id, meetingLink);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            throw new Error(
+              `GOOGLE_MEET_CREATE_FAILED:Unable to save the meeting link. ${message}`,
+            );
+          }
         } else {
           throw new Error(
             "GOOGLE_RECONNECT_REQUIRED:Connect Google to approve online appointments with Meet links.",
@@ -88,7 +124,14 @@ export class BookingService {
       }
     }
 
-    return this.repo.updateAppointmentStatus(id, status, meetingLink);
+    try {
+      return this.repo.updateAppointmentStatus(id, status, meetingLink, performedBy);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      throw new Error(
+        `APPOINTMENT_STATUS_UPDATE_FAILED:Unable to update appointment status. ${message}`,
+      );
+    }
   }
 
   rescheduleAppointment(id: string, appointmentDate: string, appointmentTime: string) {
@@ -109,6 +152,10 @@ export class BookingService {
 
   countUnreadNotifications(role: SessionRole, userId?: string) {
     return this.repo.countUnreadNotifications(role, userId);
+  }
+
+  countUnreadAnonymousMessages(role: SessionRole, userId?: string) {
+    return this.repo.countUnreadAnonymousMessages(role, userId);
   }
 
   getCounselorGoogleToken(counselorId: string) {

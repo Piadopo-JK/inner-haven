@@ -33,6 +33,7 @@ export function useInvalidateCounselorAvailability() {
   return (counselorId: string) =>
     queryClient.invalidateQueries({
       queryKey: queryKeys.availabilityByCounselor(counselorId),
+      exact: false,
     });
 }
 

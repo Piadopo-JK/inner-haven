@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -16,17 +16,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createClient } from "@/lib/supabase/client";
+import { useRealtimeChannel } from "@/lib/query/hooks/useRealtimeChannel";
+import { debouncedInvalidate } from "@/lib/query/debounce-invalidate";
 
 interface NotificationBellProps {
   role: SessionRole;
   userId: string;
+  resolvedUserId?: string;
   notifications: NotificationDTO[];
 }
 
 export default function NotificationBell({
   role,
   userId,
+  resolvedUserId,
   notifications,
 }: NotificationBellProps) {
   const router = useRouter();
@@ -52,35 +55,25 @@ export default function NotificationBell({
     },
     initialData: notifications,
     staleTime: 30_000,
-    refetchOnMount: true,
   });
 
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`notifications-${role}-${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        (payload) => {
-          const row = ((payload.new ?? payload.old) as {
-            recipient_id?: string;
-            recipient_role?: SessionRole;
-          }) ?? {};
+  useRealtimeChannel({
+    channelPrefix: `notifications-${role}-${userId}`,
+    tables: ["notifications"],
+    onEvent: (payload) => {
+      const row = ((payload.new ?? payload.old) as {
+        recipient_id?: string;
+        recipient_role?: SessionRole;
+      }) ?? {};
 
-          if (row.recipient_id !== userId || row.recipient_role !== role) {
-            return;
-          }
+      const matchId = resolvedUserId ?? userId;
+      if (row.recipient_id !== matchId || row.recipient_role !== role) {
+        return;
+      }
 
-          void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [notificationsQueryKey, queryClient, role, userId]);
+      void debouncedInvalidate(queryClient, { queryKey: notificationsQueryKey });
+    },
+  });
 
   const recentNotifications = allNotifications.slice(0, 5);
   const liveUnreadCount = allNotifications.reduce(

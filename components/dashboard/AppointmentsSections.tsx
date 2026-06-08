@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { MoreVertical } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { TruncatedText } from "@/components/ui/truncated-text";
-import { AppointmentDTO } from "@/lib/booking/contracts";
+import { AppointmentDTO, isConfirmed } from "@/lib/booking/contracts";
 
 type AppointmentSection = {
   title: string;
@@ -69,21 +68,34 @@ function AppointmentItem({
     appointment.status === "expired";
 
   const colorClass =
-    appointment.status === "approved"
+    isConfirmed(appointment.status)
       ? "bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]"
       : "bg-[var(--md-sys-color-secondary-container)] text-[var(--md-sys-color-on-secondary-container)]";
 
   return (
     <div
-      className="w-full min-w-0 max-w-full rounded-3xl p-5 flex items-center gap-4 md:gap-6 overflow-hidden break-words cursor-pointer"
+      className="w-full min-w-0 max-w-full rounded-3xl p-5 flex items-center gap-4 md:gap-6 overflow-hidden break-words cursor-pointer transition-all duration-200"
       role="link"
       tabIndex={0}
-      onClick={() => router.push(detailsHref)}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("[data-no-card-nav]")) return;
+        router.push(detailsHref);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           router.push(detailsHref);
         }
+      }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget;
+        el.style.borderColor = "var(--md-sys-color-primary)";
+        el.style.boxShadow = "var(--md-sys-elevation-level3)";
+      }}
+      onMouseLeave={(e) => {
+        const el = e.currentTarget;
+        el.style.borderColor = "var(--md-sys-color-outline-variant)";
+        el.style.boxShadow = "var(--md-sys-elevation-level1)";
       }}
       style={{
         background: "var(--md-sys-color-surface)",
@@ -117,23 +129,11 @@ function AppointmentItem({
 
       {renderActions ? (
         <div
+          data-no-card-nav="true"
           className="flex items-center gap-2 self-center shrink-0"
           onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
         >
           {renderActions(appointment)}
-        </div>
-      ) : !isTerminalStatus ? (
-        <div
-          className="flex items-center gap-2 self-center shrink-0"
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          <Button asChild variant="ghost" size="icon" className="text-[var(--md-sys-color-on-surface-variant)]">
-            <Link href={detailsHref} aria-label="Open appointment details">
-              <MoreVertical className="w-6 h-6" />
-            </Link>
-          </Button>
         </div>
       ) : null}
     </div>

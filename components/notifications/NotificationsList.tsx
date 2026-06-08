@@ -19,6 +19,7 @@ export default function NotificationsList({
   userId,
 }: NotificationsListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const markingRef = useRef(false);
 
   const virtualizer = useVirtualizer({
     count: notifications.length,
@@ -30,8 +31,12 @@ export default function NotificationsList({
   useEffect(() => {
     if (!role || !userId) return;
     if (!notifications.some((notification) => !notification.read)) return;
+    if (markingRef.current) return;
 
-    void markAllNotificationsReadAction(role, userId);
+    markingRef.current = true;
+    markAllNotificationsReadAction(role, userId).finally(() => {
+      markingRef.current = false;
+    });
   }, [notifications, role, userId]);
 
   if (notifications.length === 0) {

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import AnonymousMessagingHub from "@/components/anonymous/AnonymousMessagingHub";
+import CounselorQueue from "@/components/anonymous/CounselorQueue";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 import { requireStudentProfile } from "@/lib/supabase/require-student-profile";
 
@@ -17,7 +18,8 @@ export default async function MessagingPage({
   }
 
   if (sessionUser.role === "counselor") {
-    redirect("/anonymous-requests");
+    const params = await searchParams;
+    return <CounselorQueue initialThreadId={params.threadId} />;
   }
 
   await requireStudentProfile(sessionUser.userId);

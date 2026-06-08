@@ -47,23 +47,14 @@ export default async function AppointmentNotesPage({
 
   const { appointmentId } = await params;
 
-  const viewerEntityId = sessionUser.role === "student"
-    ? await bookingService.resolveStudentId(sessionUser.userId)
-    : await bookingService.resolveCounselorId(sessionUser.userId);
-
   const [appointment, counselors, students, sessionNote] = await Promise.all([
-    bookingService.getAppointmentById(appointmentId),
+    bookingService.verifyAppointmentAccess(sessionUser, appointmentId),
     sessionUser.role === "student" ? getCounselorsCached() : Promise.resolve([]),
     sessionUser.role === "counselor" ? getStudentsCached() : Promise.resolve([]),
     bookingService.getSessionNote(appointmentId),
   ]);
 
-  if (
-    !appointment ||
-    !viewerEntityId ||
-    (sessionUser.role === "student" && appointment.student_id !== viewerEntityId) ||
-    (sessionUser.role === "counselor" && appointment.counselor_id !== viewerEntityId)
-  ) {
+  if (!appointment) {
     redirect("/appointments");
   }
 
