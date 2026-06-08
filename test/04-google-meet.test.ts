@@ -244,7 +244,7 @@ describe("Feature 4: Google Meet / Online Counseling", () => {
       const result = await service.updateAppointmentStatus("nonexistent", "approved");
       expect(result.status).toBe("approved");
       expect(repo.getCounselorGoogleToken).not.toHaveBeenCalled();
-      expect(repo.updateAppointmentStatus).toHaveBeenCalledWith("nonexistent", "approved", undefined);
+      expect(repo.updateAppointmentStatus).toHaveBeenCalledWith("nonexistent", "approved", undefined, undefined);
     });
 
     it("sets status to declined without Meet interaction", async () => {
