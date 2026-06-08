@@ -1,4 +1,5 @@
 import {
+  AppointmentDTO,
   AppointmentStatus,
   BookingRequestDTO,
   CounselorScheduleRuleInputDTO,
@@ -7,6 +8,12 @@ import {
 import { BookingRepository } from "@/lib/booking/repository";
 import { SupabaseBookingRepository } from "@/lib/booking/supabase-repository";
 import { createMeetSpace } from "@/lib/google-meet/client";
+
+export type SessionUser = {
+  userId: string;
+  role: SessionRole;
+  email: string | undefined;
+};
 
 export class BookingService {
   constructor(private repo: BookingRepository) {}
@@ -50,6 +57,24 @@ export class BookingService {
 
   getAppointmentById(appointmentId: string) {
     return this.repo.getAppointmentById(appointmentId);
+  }
+
+  async verifyAppointmentAccess(
+    sessionUser: SessionUser,
+    appointmentId: string,
+  ): Promise<AppointmentDTO | null> {
+    const appointment = await this.repo.getAppointmentById(appointmentId);
+    if (!appointment) return null;
+
+    if (sessionUser.role === "student") {
+      const studentId = await this.repo.resolveStudentId(sessionUser.userId);
+      if (!studentId || appointment.student_id !== studentId) return null;
+    } else if (sessionUser.role === "counselor") {
+      const counselorId = await this.repo.resolveCounselorId(sessionUser.userId);
+      if (!counselorId || appointment.counselor_id !== counselorId) return null;
+    }
+
+    return appointment;
   }
 
   async updateAppointmentStatus(

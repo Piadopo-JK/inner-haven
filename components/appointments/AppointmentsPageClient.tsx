@@ -81,8 +81,8 @@ export default function AppointmentsPageClient({
       } else {
         await cancelCounselorAppointment(appointment.appointment_id);
       }
-    } catch (error) {
-      console.error("Failed to cancel appointment", error);
+    } catch {
+      // cancel failed — user can retry
     }
   }
 
@@ -96,8 +96,8 @@ export default function AppointmentsPageClient({
         appointmentId: appointment.appointment_id,
         status: "approved",
       });
-    } catch (error) {
-      console.error("Failed to approve appointment", error);
+    } catch {
+      // approve failed — user can retry
     }
   }
 
@@ -111,8 +111,8 @@ export default function AppointmentsPageClient({
         appointmentId: appointment.appointment_id,
         status: "completed",
       });
-    } catch (error) {
-      console.error("Failed to complete appointment", error);
+    } catch {
+      // complete failed — user can retry
     }
   }
 
@@ -127,8 +127,8 @@ export default function AppointmentsPageClient({
         appointmentDate: date,
         appointmentTime: time,
       });
-    } catch (error) {
-      console.error("Failed to reschedule appointment", error);
+    } catch {
+      // reschedule failed — user can retry
     }
   }
 

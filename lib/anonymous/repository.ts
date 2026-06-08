@@ -45,8 +45,7 @@ function getAnonymousLabel(threadId: string) {
 function safeDecrypt(value: string) {
   try {
     return decryptAnonymousMessage(value);
-  } catch (err) {
-    console.error("Failed to decrypt anonymous message", err);
+  } catch {
     return "[Message unavailable]";
   }
 }
@@ -440,7 +439,6 @@ export async function upsertAnonymousThreadNotification(params: {
     .maybeSingle();
 
   if (existingError) {
-    console.error("Failed to query existing thread notification", existingError);
     return;
   }
 
@@ -455,7 +453,7 @@ export async function upsertAnonymousThreadNotification(params: {
       .eq("notification_id", existing.notification_id);
 
     if (updateError) {
-      console.error("Failed to update grouped thread notification", updateError);
+      // grouped thread notification update failed silently
     }
     return;
   }
@@ -472,6 +470,6 @@ export async function upsertAnonymousThreadNotification(params: {
   });
 
   if (insertError) {
-    console.error("Failed to insert grouped thread notification", insertError);
+    // grouped thread notification insert failed silently
   }
 }
