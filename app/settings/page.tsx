@@ -59,6 +59,13 @@ export default async function SettingsPage({
 
   const params = await searchParams;
   const activeCategory = (params.category || "profile") as "profile" | "schedule" | "integrations";
+
+  // counselor-only categories, redirect unauthorized students to their allowed settings.
+  const COUNSELOR_ONLY: string[] = ["schedule", "integrations"];
+  if (sessionUser.role === "student" && COUNSELOR_ONLY.includes(activeCategory)) {
+    redirect("/settings?category=profile");
+  }
+
   const showProfile = activeCategory === "profile" || !["schedule", "integrations"].includes(activeCategory);
 
   return (
