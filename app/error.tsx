@@ -10,7 +10,7 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Route error boundary caught:", error);
+    // Route-level error boundary — error surfaced to user via UI below
   }, [error]);
 
   return (

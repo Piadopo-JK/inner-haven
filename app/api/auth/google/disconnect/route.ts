@@ -30,7 +30,6 @@ export async function DELETE() {
     .eq("counselor_id", counselorRow.counselor_id);
 
   if (error) {
-    console.error("Failed to disconnect Google account", error);
     return NextResponse.json({ error: "Failed to disconnect" }, { status: 500 });
   }
 

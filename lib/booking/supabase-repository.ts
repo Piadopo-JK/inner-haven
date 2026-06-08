@@ -295,7 +295,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .maybeSingle();
 
     if (!byAuth?.student_id) {
-      console.warn(`[booking] Could not resolve student ID for: ${id}`);
       return null;
     }
 
@@ -357,7 +356,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .maybeSingle();
 
     if (!byAuth?.counselor_id) {
-      console.warn(`[booking] Could not resolve counselor ID for: ${id}`);
       return null;
     }
 
@@ -865,7 +863,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     ]);
 
     if (notificationsError) {
-      console.error("Failed to create booking notifications", notificationsError);
+      // booking notifications failed — appointment was still created
     }
 
     return appointment;
@@ -940,7 +938,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     });
 
     if (notificationsError) {
-      console.error("Failed to create reschedule notification", notificationsError);
+      // reschedule notification failed — appointment was still updated
     }
 
     return mapAppointmentRowToDTO(data as AppointmentRow);
@@ -1018,8 +1016,8 @@ export class SupabaseBookingRepository implements BookingRepository {
             .update({ status: "completed", updated_at: new Date().toISOString() })
             .in("appointment_id", approvedToCompleteIds);
         }
-      } catch (transitionError) {
-        console.error("Failed to persist automatic appointment status transitions", transitionError);
+      } catch {
+        // automatic status transitions (expire/complete) failed — will retry next list
       }
     }
 
@@ -1116,7 +1114,7 @@ export class SupabaseBookingRepository implements BookingRepository {
     });
 
     if (notificationsError) {
-      console.error("Failed to create reschedule notification", notificationsError);
+      // reschedule notification failed — appointment was still updated
     }
 
     return mapAppointmentRowToDTO(data as AppointmentRow);
@@ -1147,7 +1145,6 @@ export class SupabaseBookingRepository implements BookingRepository {
       .maybeSingle();
 
     if (error) {
-      console.error("Failed to fetch counselor Google token", error);
       return null;
     }
 
@@ -1157,7 +1154,6 @@ export class SupabaseBookingRepository implements BookingRepository {
     try {
       return decrypt(stored);
     } catch {
-      console.error("Failed to decrypt counselor Google token");
       return null;
     }
   }
@@ -1207,7 +1203,7 @@ export class SupabaseBookingRepository implements BookingRepository {
       });
 
       if (notificationsError) {
-        console.error("Failed to create status update notification", notificationsError);
+        // status notification failed — status was still updated
       }
     }
 
@@ -1464,7 +1460,7 @@ export class SupabaseBookingRepository implements BookingRepository {
         });
 
         if (notificationsError) {
-          console.error("Failed to create session note notification", notificationsError);
+          // session note notification failed — note was still saved
         }
       }
     }
