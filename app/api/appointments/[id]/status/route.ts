@@ -26,7 +26,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Status not found" }, { status: 400 });
   }
 
-  const appointment = await bookingService.getAppointmentById(id);
+  // Verify the counselor is assigned to this appointment
+  const appointment = await bookingService.verifyAppointmentAccess(sessionUser, id);
   if (!appointment) {
     return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
   }
