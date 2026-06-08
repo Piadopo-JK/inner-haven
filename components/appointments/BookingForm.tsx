@@ -75,7 +75,6 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
   const queryClient = useQueryClient();
   const invalidateAvailability = useInvalidateCounselorAvailability();
   const { mutateAsync: saveAppointment, isPending: isSaving } = useSaveAppointment();
-  const redirectTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const prefills = React.useMemo(() => {
     if (initialAppointment) {
@@ -110,6 +109,7 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
   const [isRedirectingAfterConfirm, setIsRedirectingAfterConfirm] = React.useState(false);
+  const [showReceipt, setShowReceipt] = React.useState(false);
   const showConfirmEnvelope = isSaving || isRedirectingAfterConfirm;
 
   React.useEffect(() => {
@@ -123,12 +123,6 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
     setSuccess("");
     setIsRedirectingAfterConfirm(false);
   }, [initialAppointment, prefills]);
-
-  React.useEffect(() => {
-    return () => {
-      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-    };
-  }, []);
 
   const { data: availabilityData } = useAvailabilityForMonth(selectedCounselorId, viewMonth);
 
@@ -254,23 +248,8 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
       });
 
       setSuccess(initialAppointment ? "Your appointment has been updated!" : "Your session has been successfully requested!");
-      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-      redirectTimeoutRef.current = setTimeout(() => {
-        if (initialAppointment) {
-          router.push(`/appointments/${initialAppointment.appointment_id}`);
-        } else {
-          const params = new URLSearchParams({
-            booked: "true",
-            date: appointment.appointment_date,
-            time: appointment.appointment_time.slice(0, 5),
-            mode: appointment.mode,
-          });
-          if (selectedCounselor?.name) {
-            params.set("counselor", selectedCounselor.name);
-          }
-          router.push(`/dashboard?${params.toString()}`);
-        }
-      }, 2000);
+      setShowReceipt(true);
+      setIsRedirectingAfterConfirm(false);
     } catch (err) {
       setIsRedirectingAfterConfirm(false);
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -292,6 +271,83 @@ export default function BookingForm({ initialAppointment }: BookingFormProps) {
             message={initialAppointment ? LOADING_MESSAGES.booking.update : LOADING_MESSAGES.booking.submit}
             className="flex min-h-svh items-center justify-center"
           />
+        </div>
+      ) : null}
+
+      {showReceipt && selectedCounselor && selectedDate ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+          style={{ background: "color-mix(in srgb, var(--md-sys-color-scrim) 40%, transparent)", backdropFilter: "blur(2px)" }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200"
+            style={{
+              borderColor: "var(--md-sys-color-outline-variant)",
+              background: "var(--md-sys-color-surface-container-high)",
+            }}
+          >
+            <div
+              className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+              style={{ background: "var(--md-sys-color-primary-container)" }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--md-sys-color-on-primary-container)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+
+            <p className="text-base font-semibold mb-1 text-center" style={{ color: "var(--md-sys-color-on-surface)" }}>
+              {initialAppointment ? "Appointment updated!" : "Booking submitted successfully!"}
+            </p>
+
+            <div
+              className="mt-4 rounded-xl p-4 text-sm space-y-2"
+              style={{
+                background: "var(--md-sys-color-surface-container)",
+                border: "1px solid var(--md-sys-color-outline-variant)",
+              }}
+            >
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Counselor</span>
+                <span className="font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>{selectedCounselor.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Date</span>
+                <span className="font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>
+                  {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Time</span>
+                <span className="font-medium" style={{ color: "var(--md-sys-color-on-surface)" }}>{formatTime12h(selectedTime)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: "var(--md-sys-color-on-surface-variant)" }}>Format</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{
+                    background: "var(--md-sys-color-secondary-container)",
+                    color: "var(--md-sys-color-on-secondary-container)",
+                  }}
+                >
+                  {sessionMode === "online" ? "Online" : "In-Person"}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => {
+                setShowReceipt(false);
+                if (initialAppointment) {
+                  router.push(`/appointments/${initialAppointment.appointment_id}`);
+                } else {
+                  router.push("/dashboard");
+                }
+              }}
+              className="mt-5 w-full rounded-xl"
+              style={{ background: "var(--md-sys-color-primary)", color: "var(--md-sys-color-on-primary)" }}
+            >
+              {initialAppointment ? "View Appointment" : "Go to Dashboard"}
+            </Button>
+          </div>
         </div>
       ) : null}
 
