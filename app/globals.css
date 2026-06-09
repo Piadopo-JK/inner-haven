@@ -232,6 +232,25 @@
   box-shadow: var(--md-sys-elevation-level1);
 }
 
+.arc-gradient {
+  background:
+    radial-gradient(
+      ellipse 120% 60% at 50% -10%,
+      color-mix(in srgb, var(--md-sys-color-primary) 15%, var(--md-sys-color-primary-container)),
+      var(--md-sys-color-surface) 65%
+    );
+  background-attachment: fixed;
+}
+
+.dark .arc-gradient {
+  background: radial-gradient(
+    ellipse 80% 40% at 50% 100%,
+    var(--md-sys-color-primary-container),
+    var(--md-sys-color-surface) 70%
+  );
+  background-attachment: fixed;
+}
+
 .dark {
   --md-sys-color-primary: #4dd0ca;
   --md-sys-color-on-primary: #003735;
