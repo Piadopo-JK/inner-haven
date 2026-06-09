@@ -15,9 +15,21 @@
 | IH.010.005            | 2026-04-10    |
 | IH.010.006            | 2026-04-28    |
 | IH.010.007            | 2026-06-07    |
+| IH.010.008            | 2026-06-010    |
 | ...                   | ...           |
 
 ---
+## [IH.010.008](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+
+-Refactored messaging system with unified routes, improved realtime synchronization, message status indicators, counselor selection flow, and anonymous thread management.
+-Improved appointment management through confirmation dialogs, filtering tools, rescheduling support, booking flow hardening, and enhanced authorization controls.
+-Migrated dashboard, appointments, and counselor pages to a static shell architecture with TanStack Query caching to improve performance and reduce server-side overhead.
+-Optimized application performance through dynamic imports, image loading improvements, component extraction, rendering optimizations, and realtime infrastructure refactoring.
+-Added skeleton loaders, dashboard server clock, session notes improvements, avatar/profile fixes, authentication guards, and various UI/UX enhancements.
+-Introduced a new landing page and extended branding/theme consistency across authentication pages.
+-Added public-facing pages including About, Contact Us, Disclaimer, Privacy Policy, and Terms of Service, along with footer navigation.
+-Performed codebase cleanup, dependency fixes, logging cleanup, and general maintenance to improve stability and production readiness.
+
 ## [IH.010.007](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
 - Added counselor session notes with note management and appointment integration.
