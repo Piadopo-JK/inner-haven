@@ -59,7 +59,7 @@ export default function RootLayout({
         <QueryClientProvider>
           <ThemeProvider
             attribute="class"
-            defaultTheme="light"
+            defaultTheme="system"
             disableTransitionOnChange
           >
             <SidebarProvider>
