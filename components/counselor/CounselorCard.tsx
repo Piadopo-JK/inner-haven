@@ -78,7 +78,8 @@ export default function CounselorCard({
             fill
             priority={priority}
             className="object-cover"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
+            quality={75}
             style={{ borderRadius: "20px 20px 0 0" }}
           />
         ) : (

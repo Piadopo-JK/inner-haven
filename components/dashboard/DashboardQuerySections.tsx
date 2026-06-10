@@ -1,10 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo } from "react";
 
 import GoogleConnectBanner from "@/components/counselor/GoogleConnectBanner";
 import CounselorStatsRow from "@/components/counselor/CounselorStatsRow";
-import CalendarCard from "@/components/dashboard/CalendarCard";
 import CounselorListCard from "@/components/dashboard/CounselorListCard";
 import NextSessionCard from "@/components/dashboard/NextSessionCard";
 import RecentMessagesCard from "@/components/dashboard/RecentMessagesCard";
@@ -22,6 +22,15 @@ import {
   useAppointments,
   useAppointmentsRealtimeSync,
 } from "@/lib/query/hooks/useAppointments";
+
+const CalendarCard = dynamic(
+  () => import("@/components/dashboard/CalendarCard"),
+  {
+    loading: () => (
+      <div className="h-[280px] animate-pulse rounded-3xl bg-[var(--md-sys-color-surface-container-low)] border border-[var(--md-sys-color-outline-variant)]" />
+    ),
+  },
+);
 
 const EMPTY_APPOINTMENTS: AppointmentDTO[] = [];
 

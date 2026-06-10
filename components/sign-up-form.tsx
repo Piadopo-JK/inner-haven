@@ -1,5 +1,10 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,10 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 export function SignUpForm({
   className,
@@ -71,8 +73,18 @@ export function SignUpForm({
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Sign up</CardTitle>
+        <CardHeader className="items-center text-center">
+          <Link href="/" className="mb-2">
+            <Image
+              src="/assets/IconRet.png"
+              alt="GuidanceGO"
+              width={80}
+              height={54}
+              className="object-contain"
+              priority
+            />
+          </Link>
+          <CardTitle className="text-2xl">Sign up for GuidanceGO</CardTitle>
           <CardDescription>Create a new account</CardDescription>
         </CardHeader>
         <CardContent>

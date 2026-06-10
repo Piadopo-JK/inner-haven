@@ -1,10 +1,22 @@
+import dynamic from "next/dynamic";
 import { getSessionUser } from "@/lib/supabase/get-session-user";
 import { bookingService } from "@/lib/booking/service";
-import NotificationBell from "@/components/nav/NotificationBell";
 import HamburgerMenu from "@/components/nav/HamburgerMenu";
 import ProfileMenu from "@/components/nav/ProfileMenu";
-import CounselorHeartbeat from "@/components/layout/CounselorHeartbeat";
 import { ThemeToggle } from "@/components/theme-switcher";
+
+const NotificationBell = dynamic(
+  () => import("@/components/nav/NotificationBell"),
+  {
+    loading: () => (
+      <div className="relative shrink-0 h-9 w-9 animate-pulse rounded-md bg-[var(--md-sys-color-surface-container)]" />
+    ),
+  },
+);
+
+const CounselorHeartbeat = dynamic(
+  () => import("@/components/layout/CounselorHeartbeat"),
+);
 
 export default async function Navbar() {
   const sessionUser = await getSessionUser();

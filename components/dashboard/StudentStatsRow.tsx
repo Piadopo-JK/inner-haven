@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import dynamic from "next/dynamic";
 import { SessionRole } from "@/lib/booking/contracts";
 
-const PRESENCE_TOPIC = "presence:counselors";
+const OnlineCounselorCount = dynamic(
+  () => import("./OnlineCounselorCount"),
+  { ssr: false },
+);
 
 type StatCardProps = {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   sublabel: string;
 };
 
@@ -48,59 +50,20 @@ export type StudentStatsRowProps = {
 };
 
 export default function StudentStatsRow({
-  role,
-  userId,
   upcoming,
   messages,
   counselors,
   completed,
 }: StudentStatsRowProps) {
-  const [onlineCounselors, setOnlineCounselors] = useState(counselors);
-
-  useEffect(() => {
-    setOnlineCounselors(counselors);
-  }, [counselors]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    let disposed = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    function syncOnlineCounselors() {
-      if (disposed) {
-        return;
-      }
-      const state = channel?.presenceState() as Record<string, Array<{ counselor_id?: string }>> | undefined;
-      setOnlineCounselors(state ? Object.keys(state).length : 0);
-    }
-
-    function subscribePresence() {
-      channel = supabase.channel(PRESENCE_TOPIC);
-
-      channel
-        .on("presence", { event: "sync" }, syncOnlineCounselors)
-        .on("presence", { event: "join" }, syncOnlineCounselors)
-        .on("presence", { event: "leave" }, syncOnlineCounselors)
-        .subscribe();
-    }
-
-    subscribePresence();
-
-    return () => {
-      disposed = true;
-      if (channel) {
-        void supabase.removeChannel(channel);
-      }
-    };
-  }, []);
-
-  const unreadMessages = messages;
-
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 py-1">
       <StatCard label="Upcoming" value={upcoming} sublabel="Scheduled" />
-      <StatCard label="Messages" value={unreadMessages} sublabel="Unread" />
-      <StatCard label="Counselors" value={onlineCounselors} sublabel="Online" />
+      <StatCard label="Messages" value={messages} sublabel="Unread" />
+      <StatCard
+        label="Counselors"
+        value={<OnlineCounselorCount fallback={counselors} />}
+        sublabel="Online"
+      />
       <StatCard label="Completed" value={completed} sublabel="Milestones" />
     </div>
   );

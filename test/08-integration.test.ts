@@ -12,6 +12,7 @@ jest.mock("@/lib/supabase/get-session-user", () => ({
 const mockBookingService = {
   listAppointments: jest.fn(),
   getAppointmentById: jest.fn(),
+  verifyAppointmentAccess: jest.fn(),
   createAppointment: jest.fn(),
   updateAppointment: jest.fn(),
   updateAppointmentStatus: jest.fn(),
@@ -353,7 +354,7 @@ describe("Integration Tests", () => {
 
     it("returns 404 when appointment not found", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(null);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
 
       const res = await GET(makeRequest("/api/appointments/apt-999"), {
         params: Promise.resolve({ id: "apt-999" }),
@@ -363,7 +364,7 @@ describe("Integration Tests", () => {
 
     it("returns appointment data", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
 
       const res = await GET(makeRequest("/api/appointments/apt-1"), {
         params: Promise.resolve({ id: "apt-1" }),
@@ -371,6 +372,32 @@ describe("Integration Tests", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.appointment_id).toBe("apt-1");
+    });
+    it("returns 404 when accessing another student's appointment (BUG-005)", async () => {
+      // Student B tries to view Student A's appointment via shared URL
+      const studentB = { userId: "user-stu-2", role: "student" as const, email: "studentB@test.com" };
+      mockGetSessionUser.mockResolvedValue(studentB);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
+
+      const res = await GET(makeRequest("/api/appointments/apt-1"), {
+        params: Promise.resolve({ id: "apt-1" }),
+      });
+      expect(res.status).toBe(404);
+      expect(mockBookingService.verifyAppointmentAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "user-stu-2" }),
+        "apt-1",
+      );
+    });
+
+    it("returns 404 when counselor accesses unassigned appointment (BUG-005)", async () => {
+      const otherCounselor = { userId: "user-cou-2", role: "counselor" as const, email: "counselorB@test.com" };
+      mockGetSessionUser.mockResolvedValue(otherCounselor);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
+
+      const res = await GET(makeRequest("/api/appointments/apt-1"), {
+        params: Promise.resolve({ id: "apt-1" }),
+      });
+      expect(res.status).toBe(404);
     });
   });
 
@@ -401,7 +428,7 @@ describe("Integration Tests", () => {
 
     it("returns updated appointment for student", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       const updated = makeAppointment({ reason: "Updated reason", appointment_date: "2099-07-01" });
       mockBookingService.updateAppointment.mockResolvedValue(updated);
 
@@ -426,7 +453,7 @@ describe("Integration Tests", () => {
 
     it("returns 409 for BOOKING_SLOT_TAKEN", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointment.mockRejectedValue(new Error("Timeslot is already taken"));
 
       const res = await PATCH(
@@ -449,7 +476,7 @@ describe("Integration Tests", () => {
 
     it("returns 409 for APPOINTMENT_NOT_EDITABLE", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment({ status: "approved" }));
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment({ status: "approved" }));
 
       const res = await PATCH(
         makeRequest("/api/appointments/apt-1", {
@@ -471,7 +498,7 @@ describe("Integration Tests", () => {
 
     it("returns 500 for generic update failure", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointment.mockRejectedValue(new Error("Unknown error"));
 
       const res = await PATCH(
@@ -490,6 +517,27 @@ describe("Integration Tests", () => {
       expect(res.status).toBe(500);
       const body = await res.json();
       expect(body.code).toBe("APPOINTMENT_UPDATE_FAILED");
+    });
+
+    it("returns 404 when student tries to edit another student's appointment (BUG-005)", async () => {
+      const studentB = { userId: "user-stu-2", role: "student" as const, email: "studentB@test.com" };
+      mockGetSessionUser.mockResolvedValue(studentB);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
+
+      const res = await PATCH(
+        makeRequest("/api/appointments/apt-1", {
+          method: "PATCH",
+          body: JSON.stringify({
+            counselor_id: "cou-1",
+            appointment_date: "2099-06-01",
+            appointment_time: "10:00",
+            reason: "hacked",
+            mode: "online",
+          }),
+        }),
+        { params: Promise.resolve({ id: "apt-1" }) },
+      );
+      expect(res.status).toBe(404);
     });
   });
 
@@ -539,7 +587,7 @@ describe("Integration Tests", () => {
 
     it("returns 404 when appointment not found", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(null);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
 
       const res = await PATCH(
         makeRequest("/api/appointments/apt-999/status", {
@@ -553,7 +601,7 @@ describe("Integration Tests", () => {
 
     it("returns 200 with updated appointment", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       const approved = makeAppointment({ status: "approved" });
       mockBookingService.updateAppointmentStatus.mockResolvedValue(approved);
 
@@ -571,7 +619,7 @@ describe("Integration Tests", () => {
 
     it("calls revalidateTag with correct cache tags", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockResolvedValue(makeAppointment({ status: "approved" }));
 
       await PATCH(
@@ -587,7 +635,7 @@ describe("Integration Tests", () => {
 
     it("returns 409 with GOOGLE_RECONNECT_REQUIRED", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockRejectedValue(
         new Error("GOOGLE_RECONNECT_REQUIRED:Reconnect Google"),
       );
@@ -606,7 +654,7 @@ describe("Integration Tests", () => {
 
     it("returns 502 with GOOGLE_MEET_CREATE_FAILED", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockRejectedValue(
         new Error("GOOGLE_MEET_CREATE_FAILED:Meet failed"),
       );
@@ -623,7 +671,7 @@ describe("Integration Tests", () => {
 
     it("returns 409 for timeslot conflict", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockRejectedValue(
         new Error("Timeslot is already taken"),
       );
@@ -636,6 +684,21 @@ describe("Integration Tests", () => {
         { params: Promise.resolve({ id: "apt-1" }) },
       );
       expect(res.status).toBe(409);
+    });
+
+    it("returns 404 when unassigned counselor tries to approve (BUG-005)", async () => {
+      const otherCounselor = { userId: "user-cou-2", role: "counselor" as const, email: "counselorB@test.com" };
+      mockGetSessionUser.mockResolvedValue(otherCounselor);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
+
+      const res = await PATCH(
+        makeRequest("/api/appointments/apt-1/status", {
+          method: "PATCH",
+          body: JSON.stringify({ status: "approved" }),
+        }),
+        { params: Promise.resolve({ id: "apt-1" }) },
+      );
+      expect(res.status).toBe(404);
     });
   });
 
@@ -657,7 +720,7 @@ describe("Integration Tests", () => {
 
     it("returns 404 when appointment not found", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(null);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
 
       const res = await GET(makeRequest("/api/appointments/apt-999/notes"), {
         params: Promise.resolve({ id: "apt-999" }),
@@ -667,7 +730,7 @@ describe("Integration Tests", () => {
 
     it("returns note data", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       const note = makeNote();
       mockBookingService.getSessionNote.mockResolvedValue(note);
 
@@ -689,7 +752,7 @@ describe("Integration Tests", () => {
 
     it("returns 403 for student role", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
 
       const res = await PUT(
         makeRequest("/api/appointments/apt-1/notes", {
@@ -703,7 +766,7 @@ describe("Integration Tests", () => {
 
     it("returns 200 with created/updated note", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.resolveCounselorId.mockResolvedValue("cou-1");
       const note = makeNote();
       mockBookingService.upsertSessionNote.mockResolvedValue(note);
@@ -729,7 +792,7 @@ describe("Integration Tests", () => {
 
     it("calls revalidateTag for notes and appointment tags", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.resolveCounselorId.mockResolvedValue("cou-1");
       mockBookingService.upsertSessionNote.mockResolvedValue(makeNote());
 
@@ -1247,24 +1310,24 @@ describe("Integration Tests", () => {
 
     it("throws for missing appointment", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(null);
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(null);
       await expect(mod.updateAppointmentStatusAction("apt-999", "approved")).rejects.toThrow("Forbidden");
     });
 
     it("calls service and revalidates cache", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockResolvedValue(makeAppointment({ status: "approved" }));
 
       await mod.updateAppointmentStatusAction("apt-1", "approved");
-      expect(mockBookingService.updateAppointmentStatus).toHaveBeenCalledWith("apt-1", "approved");
+      expect(mockBookingService.updateAppointmentStatus).toHaveBeenCalledWith("apt-1", "approved", "counselor");
       expect(mockRevalidateTag).toHaveBeenCalledWith("appointments:list:counselor:user-cou-1", "max");
       expect(mockRevalidateTag).toHaveBeenCalledWith("appointment:apt-1", "max");
     });
 
     it("redirects on GOOGLE_RECONNECT_REQUIRED", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockRejectedValue(
         new Error("GOOGLE_RECONNECT_REQUIRED:Reconnect"),
       );
@@ -1285,7 +1348,7 @@ describe("Integration Tests", () => {
 
     it("throws for already cancelled appointment", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(
         makeAppointment({ status: "cancelled" }),
       );
       await expect(mod.cancelStudentAppointmentAction("apt-1")).rejects.toThrow("Appointment cannot be cancelled");
@@ -1293,13 +1356,13 @@ describe("Integration Tests", () => {
 
     it("cancels and revalidates cache", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.updateAppointmentStatus.mockResolvedValue(
         makeAppointment({ status: "cancelled" }),
       );
 
       await mod.cancelStudentAppointmentAction("apt-1");
-      expect(mockBookingService.updateAppointmentStatus).toHaveBeenCalledWith("apt-1", "cancelled");
+      expect(mockBookingService.updateAppointmentStatus).toHaveBeenCalledWith("apt-1", "cancelled", "student");
       expect(mockRevalidateTag).toHaveBeenCalledWith("appointments:list:student:user-stu-1", "max");
     });
   });
@@ -1314,7 +1377,7 @@ describe("Integration Tests", () => {
 
     it("throws for non-past non-approved appointment", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(
         makeAppointment({ status: "pending", appointment_date: "2099-06-01" }),
       );
       await expect(mod.completeAppointmentAction("apt-1")).rejects.toThrow("not eligible");
@@ -1322,7 +1385,7 @@ describe("Integration Tests", () => {
 
     it("no-ops for already completed appointment", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(
         makeAppointment({ status: "completed", appointment_date: "2020-01-01" }),
       );
 
@@ -1335,7 +1398,7 @@ describe("Integration Tests", () => {
 
     it("completes past approved appointment and revalidates", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(
         makeAppointment({ status: "approved", appointment_date: "2020-01-01" }),
       );
       mockBookingService.updateAppointmentStatus.mockResolvedValue(
@@ -1353,7 +1416,7 @@ describe("Integration Tests", () => {
 
     it("throws for non-pending appointment", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(
         makeAppointment({ status: "approved" }),
       );
       await expect(
@@ -1369,7 +1432,7 @@ describe("Integration Tests", () => {
 
     it("updates and revalidates cache", async () => {
       mockGetSessionUser.mockResolvedValue(studentSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       const updated = makeAppointment({ reason: "Updated" });
       mockBookingService.updateAppointment.mockResolvedValue(updated);
 
@@ -1400,7 +1463,7 @@ describe("Integration Tests", () => {
 
     it("reschedules and revalidates cache", async () => {
       mockGetSessionUser.mockResolvedValue(counselorSession);
-      mockBookingService.getAppointmentById.mockResolvedValue(makeAppointment());
+      mockBookingService.verifyAppointmentAccess.mockResolvedValue(makeAppointment());
       mockBookingService.rescheduleAppointment.mockResolvedValue(
         makeAppointment({ appointment_date: "2099-06-15", appointment_time: "14:00:00" }),
       );
@@ -1501,11 +1564,11 @@ describe("Integration Tests", () => {
       expect(mockBookingService.markAllNotificationsRead).toHaveBeenCalledWith("counselor", "cou-1");
     });
 
-    it("calls revalidatePath with root layout", async () => {
+    it("calls service for student role", async () => {
       mockBookingService.markAllNotificationsRead.mockResolvedValue(0);
 
       await mod.markAllNotificationsReadAction("student", "stu-1");
-      expect(mockRevalidatePath).toHaveBeenCalledWith("/", "layout");
+      expect(mockBookingService.markAllNotificationsRead).toHaveBeenCalledWith("student", "stu-1");
     });
   });
 
