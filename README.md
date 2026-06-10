@@ -1,120 +1,187 @@
-# Inner Haven
+<p align="center"><img src="public/assets/IconRet.png" alt="GuidanceGo logo" width="180" /></p>
 
-> GuidanceGo is a web-based counseling appointment scheduling system developed for Visayas State University. The system is designed to improve accessibility, efficiency, and privacy in delivering counseling services to students.
+# GuidanceGo
+
+> A secure, web-based counseling appointment scheduling and management platform developed for **Visayas State University (VSU)**. GuidanceGo connects students with counselors through an accessible, private, and efficient digital channel — appointment booking, real-time messaging, anonymous support, online Google Meet sessions, and counselor session notes.
+
+**Current release:** `v1.0.0` (first public release)
+
+GuidanceGo was developed under the internal codename **Inner Haven**. The pre-public milestone history (`IH.010.001`–`IH.010.008`) is preserved in the project's Internal Release History; from `v1.0.0` onward the project uses [Semantic Versioning](https://semver.org/).
+
+---
+
+## Overview
+
+GuidanceGo replaces ad-hoc, walk-in-based counseling scheduling with a centralized online system. **Students** browse a counselor directory, view real-time availability, and book online or in-person appointments. **Counselors** manage their schedules, approve or decline requests, host Google Meet sessions, and keep private session notes.
+
+The platform is designed around three goals:
+
+- **Accessibility** — book and manage counseling from any device, with a guided onboarding flow.
+- **Privacy** — strict role-based access, encrypted credential storage, and an anonymous support channel for students who prefer not to disclose their identity.
+- **Efficiency** — real-time updates, tag-based cache invalidation, and a fast, responsive UI.
+
+### Roles
+
+- **Students** — book, reschedule, and cancel appointments; message counselors (identified or anonymous); view session notes; receive real-time notifications.
+- **Counselors** — manage weekly availability; approve, decline, reschedule, complete, or cancel appointments; host Google Meet sessions; author session notes; respond to anonymous help requests.
 
 ---
 
-##  Release History
+## Key Features
 
-| Internal Release Code | Date Released |
-|-----------------------|---------------|
-| IH.010.001            | 2026-02-27    |
-| IH.010.002            | 2026-03-07    |
-| IH.010.003            | 2026-03-13    |
-| IH.010.004            | 2026-03-25    |
-| IH.010.005            | 2026-04-10    |
-| IH.010.006            | 2026-04-28    |
-| IH.010.007            | 2026-06-07    |
-| IH.010.008            | 2026-06-010    |
-| ...                   | ...           |
+The system implements seven core requirements (validated by a 72-case manual test suite):
+
+1. **Appointment Management** — students book online or in-person appointments against live counselor availability; counselors approve, decline, reschedule, complete, or cancel. Double-booking and past-date booking are rejected at the database level.
+2. **Notifications** — real-time, in-app notifications for booking events (request, approval, decline, reschedule, session notes) via a bell dropdown and a dedicated page; the unread badge updates live.
+3. **Counselor Directory & Availability** — students browse counselor profiles and view availability up to 42 days ahead; counselors manage their own weekly schedule.
+4. **Google Meet Integration** — counselors connect via Google OAuth 2.0; approving an online appointment automatically generates a Google Meet link. Expired connections prompt reconnection.
+5. **Anonymous Help Requests** — students can start pseudonymous conversations with counselors; messages are private and each student–counselor pair is limited to one active thread.
+6. **Authentication** — email/password and Google sign-in, email verification, password reset, and server-side route guards with role checks.
+7. **Counselor Session Notes** — counselors author private session notes (general notes, recommendations, follow-up plans) per appointment; students are read-only and are notified when notes are first created.
+
+**Supplementary features:** public landing page and supporting pages (About, Contact, Disclaimer, Privacy Policy, Terms of Service), Material Design 3 theming, skeleton loaders, dashboard server clock, counselor presence/heartbeat, and global cache warming.
 
 ---
-## [IH.010.008](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
--Refactored messaging system with unified routes, improved realtime synchronization, message status indicators, counselor selection flow, and anonymous thread management.
--Improved appointment management through confirmation dialogs, filtering tools, rescheduling support, booking flow hardening, and enhanced authorization controls.
--Migrated dashboard, appointments, and counselor pages to a static shell architecture with TanStack Query caching to improve performance and reduce server-side overhead.
--Optimized application performance through dynamic imports, image loading improvements, component extraction, rendering optimizations, and realtime infrastructure refactoring.
--Added skeleton loaders, dashboard server clock, session notes improvements, avatar/profile fixes, authentication guards, and various UI/UX enhancements.
--Introduced a new landing page and extended branding/theme consistency across authentication pages.
--Added public-facing pages including About, Contact Us, Disclaimer, Privacy Policy, and Terms of Service, along with footer navigation.
--Performed codebase cleanup, dependency fixes, logging cleanup, and general maintenance to improve stability and production readiness.
+## Technology Stack
 
-## [IH.010.007](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+| Layer | Technology |
+|-------|------------|
+| Framework / Runtime | Next.js 16 (App Router, React Server Components), React 19, TypeScript 5 |
+| Backend / BaaS | Supabase — PostgreSQL 15, Auth, Realtime (WebSockets), Storage, Edge Functions |
+| Styling | Tailwind CSS 3.4 with Material Design 3 design tokens |
+| Authentication | Supabase Auth (email/password) + Google OAuth 2.0 |
+| Google integrations | Google Meet, Google Calendar API, Google OAuth |
+| Data layer | TanStack Query 5 (client caching) + Next.js tag-based cache invalidation (server) |
+| Data architecture | Repository pattern with a service layer (contracts → repository → service) |
+| Testing | Jest 30, ts-jest |
+| Tooling | Node.js 20 LTS, npm, ESLint, Supabase CLI |
 
-- Added counselor session notes with note management and appointment integration.
-- Migrated the application to TanStack Query, improving data fetching, caching, and loading states.
-- Introduced anonymous support messaging, including anonymous identities, counselor queues, and chat functionality.
-- Added a guided onboarding flow with profile creation checks and route guards.
-- Improved notifications, appointment synchronization, and overall application performance.
-- Strengthened security with Content Security Policy (CSP) enforcement and infrastructure updates.
-- Added comprehensive unit and integration test coverage across core application features.
+---
 
-## [IH.010.006](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+## System Architecture
 
-- add booking, availability, counselor schedule, and settings API endpoints with updated server actions  for appointments and profile management
-- refactor booking domain (contracts, service, repository) to support caching, scheduling changes, and improved supabase integration
-- introduce client-side settings cache layer for optimized profile and settings reads
-- update supabase repository logic and add avatar storage helper for profile image management
-- add global application layout shell with sidebar navigation system and shared layout context
-- introduce cache warmer initializer and global cache warming mechanism to improve navigation performance and reduce initial load latency
-- integrate counselor heartbeat system into layout for presence tracking and session awareness
-- refactor navigation architecture with centralized config and sidebar context state management
-- add full appointments frontend module including booking flow, session pages, and appointment detail/edit views
-- add appointment UI components
-- refactor student and counselor dashboards with improved session visibility, stats, and upcoming appointment widgets
-- redesign counselor directory and dashboard cards for availability, summaries, and appointment insights
+GuidanceGo follows a **three-tier architecture**, separating concerns into the Presentation tier, Application tier, and Data tier. This keeps the codebase organized, secure, and easier to maintain.
+
+```mermaid
+graph TB
+    subgraph "Tier 1 — Presentation"
+        BROWSER["🖥️ Browser / Mobile"]
+        PAGES["Next.js Pages & Components"]
+        STYLE["Tailwind CSS + Material Design 3"]
+    end
+
+    subgraph "Tier 2 — Application"
+        API["API Routes & Server Actions"]
+        SERVICES["Domain Services<br/>(booking · messaging · notifications · Google Meet)"]
+        AUTH["Authentication Layer<br/>(Supabase Auth + Google OAuth)"]
+        REALTIME["Real-time Engine<br/>(Supabase Realtime)"]
+    end
+
+    subgraph "Tier 3 — Data"
+        DB["PostgreSQL Database"]
+        STORAGE["File Storage"]
+        EDGE["Edge Functions<br/>(auto-expire appointments)"]
+    end
+
+    BROWSER --> PAGES
+    PAGES --> API
+    PAGES --> REALTIME
+    API --> AUTH
+    API --> SERVICES
+    SERVICES --> DB
+    REALTIME --> DB
+    DB --> STORAGE
+    DB --> EDGE
+```
+
+### Tier 1 — Presentation (What users see and interact with)
+
+The front-end is built with Next.js and React, styled with Tailwind CSS following Material Design 3 guidelines. Pages are organized by role — public visitors, authenticated users, students, and counselors each see a different set of pages tailored to their needs.
+
+### Tier 2 — Application (Where business logic lives)
+
+This is the heart of the system. When a student books an appointment, sends a message, or a counselor writes session notes, the logic runs here. Key pieces:
+
+- **API Routes & Server Actions** handle incoming requests and check that the user is logged in and has the right permissions.
+- **Domain Services** contain the core business rules — booking validation, notification delivery, anonymous messaging, and Google Meet link generation. Each domain (appointments, messaging, notifications, etc.) is self-contained.
+- **Authentication** verifies identity through email/password or Google sign-in, and ensures only the right people can access sensitive data.
+- **Real-time Engine** pushes live updates — new notifications, incoming messages, appointment changes — without needing to refresh the page.
+
+### Tier 3 — Data (Where information is stored)
+
+All data lives in a PostgreSQL database managed by Supabase. This includes user profiles, appointments, messages, notifications, and counselor notes. File attachments are stored separately in Supabase Storage. A scheduled Edge Function runs periodically to automatically mark past appointments as completed.
 
 
-## [IH.010.005](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
 
-- enforce session auth, role checks, and identity scoping on all API routes and server actions
-- harden booking repository ID resolution and use service-role Supabase client
-- add Google OAuth 2.0 flow for counselors and secure token storage
-- add /settings page for managing Google integration
-- update dashboard banner to only show connect prompt when not linked
-- show “Join Meeting” buttons in appointments list for approved online sessions
-- render Google Meet links in notification cards
-- fix CalendarCard to receive actual appointment data, rendering booked dates correctly
-- replace SPA navigation with full page navigation after auth transitions
-- convert profile menu to anchored dropdown with Settings and Log out actions
+---
 
-## [IH.010.004](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+## Installation
 
-- add supabase booking repository and move appointment flow to supabase
-- add counselor directory search and availability slots
-- refactor booking page to slot-first booking flow
-- add appointment conflict checking and past booking guard
-- add realtime availability updates for counselor directory and booking page
-- add missing entity modules for build stability
+**Prerequisites:** Node.js 20.x LTS, npm 10.x, Git 2.40+, Supabase CLI 2.x, and a Google Cloud Console account (for OAuth + Meet credentials).
 
-## [IH.010.003](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+```bash
+# 1. Clone and install dependencies
+git clone https://github.com/Kissu1/inner-haven-dev.git
+cd inner-haven-dev
+npm install
 
--add navigation bar
--add notification bell component
--add notification page, list card & server action
--add booking notifications
--add notif DTO
--add notif API on booking service
--add API route for notification for student/councelor
+# 2. Configure environment variables
+cp .env.example .env.local
+#   Fill in: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+#            SUPABASE_SERVICE_ROLE_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#            GOOGLE_REDIRECT_URI, TOKEN_ENCRYPTION_KEY, NEXT_PUBLIC_APP_URL
 
-## [IH.010.002](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+# 3. Apply the database schema (migrations 0001–0011)
+supabase db push
 
-- add counselor dashboard
-- add counselor specific components
-- fix config files & color tokens
-- add student dashboard components
-- add student appointment booking page
-- change api routes for booking
-- remove placeholder db
-- replaced entities with data transfer types
-- add in-memory repository
-- add CRUD APIs for booking
-- unified dashboard layout
-- add user role check for dashboard
-- add appointments page
-- change booking modal to booking page
+# 4. Start the dev server
+npm run dev
+#   → http://localhost:3000
+```
 
-## [IH.010.001](https://github.com/Piadopo-JK/internal-codename/tree/dev) Release Notes
+**Google Cloud setup:** enable the Google Meet and Google Calendar APIs, create OAuth 2.0 credentials, and set the authorized redirect URI to `${NEXT_PUBLIC_APP_URL}/api/auth/google/callback`.
 
-- project initialization
-- add initial layout of student dashboard
-- add entity classes according to URD
-- add student dashboard components
-- add student appointment booking page
+**Generate an encryption key** for Google token storage:
 
-## Important Links
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
+**Available scripts:** `dev`, `build`, `start`, `lint`, `test`, `test:watch`.
+
+---
+
+## Production Deployment
+
+1. **Environment** — set production values for all variables in `.env.example`; in particular point `NEXT_PUBLIC_APP_URL` at the production domain and provide `SUPABASE_SERVICE_ROLE_KEY` and a strong `TOKEN_ENCRYPTION_KEY`.
+2. **Build & run** — `npm run build` then `npm start`, or deploy to any Node.js host (e.g. Vercel).
+3. **Database** — run the migrations against the production Supabase project (`supabase db push`), then deploy and schedule the `auto-expire-appointments` Edge Function.
+4. **Google Cloud** — add the production OAuth redirect URI (`https://<domain>/api/auth/google/callback`) to the authorized redirect URIs.
+5. **Supabase Auth** — enable the email and Google providers and set the production site URL.
+6. **Security headers** — CSP and other hardening headers are enforced via `next.config.ts`; confirm the Supabase and Google hosts are permitted in the `connect-src`/`img-src` directives.
+
+
+
+---
+
+## Testing
+
+- **Automated suite** — Jest + ts-jest specs under [`test/`](./test) (8 spec files) cover all seven requirement areas: appointment scheduling, notifications, counselor directory/availability, Google Meet, anonymous help, authentication, and counselor notes. Run with `npm test`.
+- **Manual test cases** — 72 scenario-based cases mapped to `REQ-001`–`REQ-007`, documented in [`test-suite/`](./test-suite/README.md).
+- **Defects** — 5 bugs were logged by the independent software testing team during Q2 2026 and all were fixed and verified (100% fix rate), including one critical authorization gap (`BUG-005`, appointment details exposed via shared URL).
+
+---
+
+## Documentation
+
+- [Manual Test Suite](./test-suite/README.md)
 - **Design Specifications:** https://github.com/Piadopo-JK/inner-haven-docportal
+
 ---
 
+## License
+
+GuidanceGo is an academic software engineering capstone project developed at Visayas State University. © 2026 the GuidanceGo authors.
+
+No open-source license has been applied to this repository; all rights are reserved by the authors. If you intend to reuse, fork, or adapt this codebase, contact the maintainers or add an appropriate `LICENSE` file before doing so.
